@@ -2,10 +2,6 @@
 
 This repository contains the essential code for Discovering Latent Knowledge in Language Models Without Supervision.
 
-<p align="center">
-<img src="figure.png" width="750">
-</p>
-
 We introduce a method for discovering truth-like features directly from model activations in a purely unsupervised way.
 
 ## Abstract
@@ -45,10 +41,6 @@ python evaluate.py --model_name deberta  --num_examples 400 --batch_size 40
 ```
 
 In addition to evaluating the performance of CCS, `evaluate.py` also verifies that logistic regression (LR) accuracy is reasonable. This can diagnose why CCS performance may be low; if LR accuracy is low, that suggestions that the model's representations aren't good enough for CCS to work well.
-
-### Requirements
-
-This code base was tested on Python 3.7.5 and PyTorch 1.12. It also uses the [datasets](https://pypi.org/project/datasets/) and [promptsource](https://github.com/bigscience-workshop/promptsource) packages for loading and formatting datasets. 
 
 ## Citation
 
