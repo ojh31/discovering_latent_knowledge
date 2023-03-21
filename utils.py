@@ -32,6 +32,7 @@ model_mapping = {
     "deberta-mnli": "microsoft/deberta-xxlarge-v2-mnli",
     "deberta-xxl": "microsoft/deberta-xxlarge-v2",
     "deberta-xl": "microsoft/deberta-v2-xlarge",
+    "deberta-l": "microsoft/deberta-v3-large",
     "roberta-mnli": "roberta-large-mnli",
 }
 
