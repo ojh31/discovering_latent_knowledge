@@ -362,7 +362,10 @@ def get_first_mask_loc(mask, shift=False):
     return first_mask_loc
 
 
-def get_individual_hidden_states(model, batch_ids, layer=None, all_layers=True, token_idx=-1, model_type="encoder_decoder", use_decoder=False):
+def get_individual_hidden_states(
+        model, batch_ids, layer=None, all_layers=True, token_idx=-1, 
+        model_type="encoder_decoder", use_decoder=False
+    ):
     """
     Given a model and a batch of tokenized examples, returns the hidden states for either 
     a specified layer (if layer is a number) or for all layers (if all_layers is True).
@@ -399,23 +402,39 @@ def get_individual_hidden_states(model, batch_ids, layer=None, all_layers=True, 
     if token_idx == 0:
         final_hs = hs[:, 0]  # (bs, dim, num_layers)
     else:
-        # if token_idx == -1, then takes the hidden states corresponding to the last non-mask tokens
+        # if token_idx == -1, then takes the hidden states corresponding to 
+        # the last non-mask tokens
         # first we need to get the first mask location for each example in the batch
-        assert token_idx < 0, print("token_idx must be either 0 or negative, but got", token_idx)
-        mask = batch_ids["decoder_attention_mask"] if (model_type == "encoder_decoder" and use_decoder) else batch_ids["attention_mask"]
+        assert token_idx < 0, print(
+            "token_idx must be either 0 or negative, but got", token_idx
+        )
+        mask = batch_ids["decoder_attention_mask"] if (
+            model_type == "encoder_decoder" and use_decoder
+        ) else batch_ids["attention_mask"]
         first_mask_loc = get_first_mask_loc(mask).squeeze()
-        final_hs = hs[torch.arange(hs.size(0)), first_mask_loc+token_idx]  # (bs, dim, num_layers)
+        final_hs = hs[
+            torch.arange(hs.size(0)), first_mask_loc+token_idx
+        ]  # (bs, dim, num_layers)
     
     return final_hs
 
 
-def get_all_hidden_states(model, dataloader, layer=None, all_layers=True, token_idx=-1, model_type="encoder_decoder", use_decoder=False):
+def get_all_hidden_states(
+        model, dataloader, layer=None, all_layers=True, token_idx=-1, 
+        model_type="encoder_decoder", use_decoder=False
+    ):
     """
-    Given a model, a tokenizer, and a dataloader, returns the hidden states (corresponding to a given position index) in all layers for all examples in the dataloader,
+    Given a model, a tokenizer, and a dataloader, returns the 
+    hidden states (corresponding to a given position index) in 
+    all layers for all examples in the dataloader,
     along with the average log probs corresponding to the answer tokens
 
-    The dataloader should correspond to examples *with a candidate label already added* to each example.
-    E.g. this function should be used for "Q: Is 2+2=5? A: True" or "Q: Is 2+2=5? A: False", but NOT for "Q: Is 2+2=5? A: ".
+    The dataloader should correspond to examples with a candidate label 
+    already added to each example.
+    E.g. this function should be used for 
+    "Q: Is 2+2=5? A: True" or 
+    "Q: Is 2+2=5? A: False", but NOT for 
+    "Q: Is 2+2=5? A: ".
     """
     all_pos_hs, all_neg_hs = [], []
     all_gt_labels = []
@@ -424,10 +443,14 @@ def get_all_hidden_states(model, dataloader, layer=None, all_layers=True, token_
     for batch in tqdm(dataloader):
         neg_ids, pos_ids, _, _, gt_label = batch
 
-        neg_hs = get_individual_hidden_states(model, neg_ids, layer=layer, all_layers=all_layers, token_idx=token_idx, 
-                                              model_type=model_type, use_decoder=use_decoder)
-        pos_hs = get_individual_hidden_states(model, pos_ids, layer=layer, all_layers=all_layers, token_idx=token_idx, 
-                                              model_type=model_type, use_decoder=use_decoder)
+        neg_hs = get_individual_hidden_states(
+            model, neg_ids, layer=layer, all_layers=all_layers, token_idx=token_idx, 
+            model_type=model_type, use_decoder=use_decoder
+        )
+        pos_hs = get_individual_hidden_states(
+            model, pos_ids, layer=layer, all_layers=all_layers, token_idx=token_idx, 
+            model_type=model_type, use_decoder=use_decoder
+        )
 
         if dataloader.batch_size == 1:
             neg_hs, pos_hs = neg_hs.unsqueeze(0), pos_hs.unsqueeze(0)
@@ -444,7 +467,7 @@ def get_all_hidden_states(model, dataloader, layer=None, all_layers=True, token_
 
 ############# CCS #############
 class MLPProbe(nn.Module):
-    def __init__(self, d, hidden_size=100):
+    def __init__(self, d, hidden_size):
         super().__init__()
         self.linear1 = nn.Linear(d, hidden_size)
         self.linear2 = nn.Linear(hidden_size, 1)
@@ -453,30 +476,105 @@ class MLPProbe(nn.Module):
         h = F.relu(self.linear1(x))
         o = self.linear2(h)
         return torch.sigmoid(o)
+    
 
-class CCS(object):
+class LatentKnowledgeMethod(object):
+
     def __init__(
-        self, x0, x1, nepochs=1000, ntries=10, lr=1e-3, batch_size=-1, 
-        verbose=False, device="cuda", linear=True, weight_decay=0.01, 
-        var_normalize=False,
-):
-        # data
+            self, 
+            x0: torch.Tensor, 
+            x1: torch.Tensor, 
+            mean_normalize: bool = True,
+            var_normalize: bool = True,
+            device: str = 'cuda',
+            **kwargs
+    ) -> None:
+        '''
+        x0: negative hidden states, shape [num_examples, num_hidden_states]
+        x1: positive hidden states, shape [num_examples, num_hidden_states]
+        '''
+        self.device = device
+        self.mean_normalize = mean_normalize
         self.var_normalize = var_normalize
         self.x0 = self.normalize(x0)
         self.x1 = self.normalize(x1)
         self.d = self.x0.shape[-1]
+
+    def normalize(self, x):
+        """
+        Mean-normalizes the data x (of shape (n, d))
+        If self.var_normalize, also divides by the standard deviation
+        """
+        if self.mean_normalize:
+            normalized_x = x - x.mean(axis=0, keepdims=True)
+        if self.var_normalize:
+            normalized_x /= normalized_x.std(axis=0, keepdims=True)
+
+        return normalized_x
+    
+    def get_tensor_data(self):
+        """
+        Returns x0, x1 as appropriate tensors (rather than np arrays)
+        """
+        x0 = torch.tensor(self.x0, dtype=torch.float, requires_grad=False, device=self.device)
+        x1 = torch.tensor(self.x1, dtype=torch.float, requires_grad=False, device=self.device)
+        return x0, x1
+    
+    def get_acc(self, x0_test, x1_test, y_test):
+        """
+        Computes accuracy for the current parameters on the given test inputs
+        """
+        x0 = torch.tensor(
+            self.normalize(x0_test), 
+            dtype=torch.float, 
+            requires_grad=False, 
+            device=self.device
+        )
+        x1 = torch.tensor(
+            self.normalize(x1_test), 
+            dtype=torch.float, 
+            requires_grad=False, 
+            device=self.device
+        )
+        with torch.no_grad():
+            p0, p1 = self.best_probe(x0), self.best_probe(x1)
+        avg_confidence = 0.5 * (p0 + (1 - p1))
+        predictions = (avg_confidence.detach().cpu().numpy() < 0.5).astype(int)[:, 0]
+        acc = (predictions == y_test).mean()
+        acc = max(acc, 1 - acc)
+        return acc
+    
+
+class CCS(LatentKnowledgeMethod):
+    def __init__(
+        self, x0, x1, nepochs=1000, ntries=10, lr=1e-3, batch_size=-1, 
+        verbose=False, device="cuda", linear=True, hidden_size=None, 
+        weight_decay=0.01, mean_normalize=True,
+        var_normalize=False,
+    ):
+        super().__init__(
+            x0, 
+            x1, 
+            mean_normalize=mean_normalize, 
+            var_normalize=var_normalize,
+            device=device,
+        )
+        assert (
+            (hidden_size is None and linear) or 
+            (hidden_size is not None and not linear)
+        )
 
         # training
         self.nepochs = nepochs
         self.ntries = ntries
         self.lr = lr
         self.verbose = verbose
-        self.device = device
         self.batch_size = batch_size
         self.weight_decay = weight_decay
         
         # probe
         self.linear = linear
+        self.hidden_size = hidden_size
         self.probe = self.initialize_probe()
         self.best_probe = copy.deepcopy(self.probe)
 
@@ -485,29 +583,8 @@ class CCS(object):
         if self.linear:
             self.probe = nn.Sequential(nn.Linear(self.d, 1), nn.Sigmoid())
         else:
-            self.probe = MLPProbe(self.d)
+            self.probe = MLPProbe(self.d, self.hidden_size)
         self.probe.to(self.device)    
-
-
-    def normalize(self, x):
-        """
-        Mean-normalizes the data x (of shape (n, d))
-        If self.var_normalize, also divides by the standard deviation
-        """
-        normalized_x = x - x.mean(axis=0, keepdims=True)
-        if self.var_normalize:
-            normalized_x /= normalized_x.std(axis=0, keepdims=True)
-
-        return normalized_x
-
-        
-    def get_tensor_data(self):
-        """
-        Returns x0, x1 as appropriate tensors (rather than np arrays)
-        """
-        x0 = torch.tensor(self.x0, dtype=torch.float, requires_grad=False, device=self.device)
-        x1 = torch.tensor(self.x1, dtype=torch.float, requires_grad=False, device=self.device)
-        return x0, x1
     
 
     def get_loss(self, p0, p1):
@@ -517,22 +594,6 @@ class CCS(object):
         informative_loss = (torch.min(p0, p1)**2).mean(0)
         consistent_loss = ((p0 - (1-p1))**2).mean(0)
         return informative_loss + consistent_loss
-
-
-    def get_acc(self, x0_test, x1_test, y_test):
-        """
-        Computes accuracy for the current parameters on the given test inputs
-        """
-        x0 = torch.tensor(self.normalize(x0_test), dtype=torch.float, requires_grad=False, device=self.device)
-        x1 = torch.tensor(self.normalize(x1_test), dtype=torch.float, requires_grad=False, device=self.device)
-        with torch.no_grad():
-            p0, p1 = self.best_probe(x0), self.best_probe(x1)
-        avg_confidence = 0.5*(p0 + (1-p1))
-        predictions = (avg_confidence.detach().cpu().numpy() < 0.5).astype(int)[:, 0]
-        acc = (predictions == y_test).mean()
-        acc = max(acc, 1 - acc)
-
-        return acc
     
         
     def train(self):
