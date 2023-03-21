@@ -21,14 +21,17 @@ from datasets import load_dataset
 
 ############# Model loading and result saving #############
 
-# Map each model name to its full Huggingface name; this is just for convenience for common models. You can run whatever model you'd like.
+# Map each model name to its full Huggingface name
+# This is just for convenience for common models. 
+# You can run whatever model you'd like.
 model_mapping = {
     "gpt-j": "EleutherAI/gpt-j-6B",
     "T0pp": "bigscience/T0pp",
     "unifiedqa": "allenai/unifiedqa-t5-11b",
     "T5": "t5-11b",
     "deberta-mnli": "microsoft/deberta-xxlarge-v2-mnli",
-    "deberta": "microsoft/deberta-xxlarge-v2",
+    "deberta-xxl": "microsoft/deberta-xxlarge-v2",
+    "deberta-xl": "microsoft/deberta-v2-xlarge",
     "roberta-mnli": "roberta-large-mnli",
 }
 
@@ -141,13 +144,18 @@ def load_all_generations(args):
 ############# Data #############
 class ContrastDataset(Dataset):
     """
-    Given a dataset and tokenizer (from huggingface), along with a collection of prompts for that dataset from promptsource and a corresponding prompt index, 
+    Given a dataset and tokenizer (from huggingface), along with 
+    a collection of prompts for that dataset from promptsource and 
+    a corresponding prompt index, 
     returns a dataset that creates contrast pairs using that prompt
     
-    Truncates examples larger than max_len, which can mess up contrast pairs, so make sure to only give it examples that won't be truncated.
+    Truncates examples larger than max_len, which can mess up 
+    contrast pairs, so make sure to only give it examples that won't be truncated.
     """
-    def __init__(self, raw_dataset, tokenizer, all_prompts, prompt_idx, 
-                 model_type="encoder_decoder", use_decoder=False, device="cuda"):
+    def __init__(
+        self, raw_dataset, tokenizer, all_prompts, prompt_idx, 
+        model_type="encoder_decoder", use_decoder=False, device="cuda"
+):
 
         # data and tokenizer
         self.raw_dataset = raw_dataset
@@ -171,19 +179,24 @@ class ContrastDataset(Dataset):
 
     def encode(self, nl_prompt):
         """
-        Tokenize a given natural language prompt (from after applying self.prompt to an example)
+        Tokenize a given natural language prompt
+        (from after applying self.prompt to an example)
         
         For encoder-decoder models, we can either:
-        (1) feed both the question and answer to the encoder, creating contrast pairs using the encoder hidden states
-            (which uses the standard tokenization, but also passes the empty string to the decoder), or
-        (2) feed the question the encoder and the answer to the decoder, creating contrast pairs using the decoder hidden states
+        (1) feed both the question and answer to the encoder, 
+            creating contrast pairs using the encoder hidden states
+            (which uses the standard tokenization, but also passes the empty string to the decoder), 
+        or
+        (2) feed the question the encoder and the answer to the decoder, 
+        creating contrast pairs using the decoder hidden states
         
         If self.decoder is True we do (2), otherwise we do (1).
         """
         # get question and answer from prompt
         question, answer = nl_prompt
         
-        # tokenize the question and answer (depending upon the model type and whether self.use_decoder is True)
+        # tokenize the question and answer 
+        # (depending upon the model type and whether self.use_decoder is True)
         if self.model_type == "encoder_decoder":
             input_ids = self.get_encoder_decoder_input_ids(question, answer)
         elif self.model_type == "encoder":
@@ -212,7 +225,8 @@ class ContrastDataset(Dataset):
     def get_decoder_input_ids(self, question, answer):
         """
         Format the input ids for encoder-only models.
-        This is the same as get_encoder_input_ids except that we add the EOS token at the end of the input (which apparently can matter)
+        This is the same as get_encoder_input_ids except that 
+        we add the EOS token at the end of the input (which apparently can matter)
         """
         combined_input = question + " " + answer + self.tokenizer.eos_token
         input_ids = self.tokenizer(combined_input, truncation=True, padding="max_length", return_tensors="pt")
@@ -223,7 +237,8 @@ class ContrastDataset(Dataset):
     def get_encoder_decoder_input_ids(self, question, answer):
         """
         Format the input ids for encoder-decoder models.
-        There are two cases for this, depending upon whether we want to use the encoder hidden states or the decoder hidden states.
+        There are two cases for this, depending upon whether we want to use 
+        the encoder hidden states or the decoder hidden states.
         """
         if self.use_decoder:
             # feed the same question to the encoder but different answers to the decoder to construct contrast pairs
@@ -250,9 +265,14 @@ class ContrastDataset(Dataset):
         # get the possible labels
         # (for simplicity assume the binary case for contrast pairs)
         label_list = self.prompt.get_answer_choices_list(data)
-        assert len(label_list) == 2, print("Make sure there are only two possible answers! Actual number of answers:", label_list)
+        assert len(label_list) == 2, print(
+            "Make sure there are only two possible answers! "
+            "Actual number of answers:", 
+            label_list
+        )
 
-        # reconvert to dataset format but with fake/candidate labels to create the contrast pair
+        # reconvert to dataset format but with fake/candidate labels to 
+        # create the contrast pair
         neg_example = {"text": text, "label": 0}
         pos_example = {"text": text, "label": 1}
 
@@ -265,16 +285,26 @@ class ContrastDataset(Dataset):
 
         # verify these are different (e.g. tokenization didn't cut off the difference between them)
         if self.use_decoder and self.model_type == "encoder_decoder":
-            assert (neg_ids["decoder_input_ids"] - pos_ids["decoder_input_ids"]).sum() != 0, print("The decoder_input_ids for the contrast pairs are the same!", neg_ids, pos_ids)
+            assert (neg_ids["decoder_input_ids"] - pos_ids["decoder_input_ids"]).sum() != 0, print(
+                "The decoder_input_ids for the contrast pairs are the same!", 
+                neg_ids, 
+                pos_ids
+            )
         else:
-            assert (neg_ids["input_ids"] - pos_ids["input_ids"]).sum() != 0, print("The input_ids for the contrast pairs are the same!", neg_ids, pos_ids)
+            assert (neg_ids["input_ids"] - pos_ids["input_ids"]).sum() != 0, print(
+                "The input_ids for the contrast pairs are the same!", 
+                neg_ids, 
+                pos_ids
+            )
 
         # return the tokenized inputs, the text prompts, and the true label
         return neg_ids, pos_ids, neg_prompt, pos_prompt, true_answer
 
     
-def get_dataloader(dataset_name, split, tokenizer, prompt_idx, batch_size=16, num_examples=1000,
-                   model_type="encoder_decoder", use_decoder=False, device="cuda", pin_memory=True, num_workers=1):
+def get_dataloader(
+        dataset_name, split, tokenizer, prompt_idx, batch_size=16, num_examples=1000,
+        model_type="encoder_decoder", use_decoder=False, device="cuda", pin_memory=True, num_workers=1
+):
     """
     Creates a dataloader for a given dataset (and its split), tokenizer, and prompt index
 
@@ -413,10 +443,10 @@ def get_all_hidden_states(model, dataloader, layer=None, all_layers=True, token_
 
 ############# CCS #############
 class MLPProbe(nn.Module):
-    def __init__(self, d):
+    def __init__(self, d, hidden_size=100):
         super().__init__()
-        self.linear1 = nn.Linear(d, 100)
-        self.linear2 = nn.Linear(100, 1)
+        self.linear1 = nn.Linear(d, hidden_size)
+        self.linear2 = nn.Linear(hidden_size, 1)
 
     def forward(self, x):
         h = F.relu(self.linear1(x))
@@ -424,8 +454,11 @@ class MLPProbe(nn.Module):
         return torch.sigmoid(o)
 
 class CCS(object):
-    def __init__(self, x0, x1, nepochs=1000, ntries=10, lr=1e-3, batch_size=-1, 
-                 verbose=False, device="cuda", linear=True, weight_decay=0.01, var_normalize=False):
+    def __init__(
+        self, x0, x1, nepochs=1000, ntries=10, lr=1e-3, batch_size=-1, 
+        verbose=False, device="cuda", linear=True, weight_decay=0.01, 
+        var_normalize=False,
+):
         # data
         self.var_normalize = var_normalize
         self.x0 = self.normalize(x0)
