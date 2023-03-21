@@ -38,7 +38,7 @@ def main(args, generation_args):
 
 if __name__ == "__main__":
     parser = get_parser()
-    generation_args = parser.parse_args()  # we'll use this to load the correct hidden states + labels
+    generation_args, _ = parser.parse_known_args() # we'll use this to load the correct hidden states + labels
     # We'll also add some additional args for evaluation
     parser.add_argument("--nepochs", type=int, default=1000)
     parser.add_argument("--ntries", type=int, default=10)
