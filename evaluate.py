@@ -1,16 +1,49 @@
 #%%
+import argparse
 import json
+import numpy as np
 import os
 import sys
 import time
+import plotly.offline as off
 import plotly.express as px
 from sklearn.linear_model import LogisticRegression
+import torch
+from typing import Union
 from utils import get_parser, load_all_generations, CCS
 #%%
 MAIN = __name__ == "__main__"
 RUNNING_FROM_IPYNB = "ipykernel_launcher" in os.path.basename(sys.argv[0])
-
-
+#%%
+def clean_name(s: str):
+    return s.lower().replace('-', '_')
+#%%
+def plot_feature_importance(
+    vec: Union[np.ndarray, torch.Tensor], label: str, a: argparse.Namespace,
+):
+    model_name = clean_name(a.model_name)
+    label_clean = clean_name(label)
+    if isinstance(vec, torch.Tensor):
+        vec = vec.cpu().detach().numpy()
+    fig = px.histogram(
+        x=vec, 
+        title=f'{label} feature importance distribution',
+    )
+    fig.update_layout({
+        'title_x': 0.5,
+    })
+    fig.show()
+    if not os.path.exists(a.plot_dir):
+        os.mkdir(a.plot_dir)
+    off.plot(
+        fig, 
+        filename=os.path.join(
+            a.plot_dir, 
+            f'{model_name}_{label_clean}_feature_importance.html'
+        )
+    )
+    
+#%%
 def save_eval(key, val, args):
     """
     Input: 
@@ -33,10 +66,6 @@ def save_eval(key, val, args):
         f.write(json.dumps(eval_d))
 
 
-def main(args, generation_args):
-    pass
-
-
 #%%
 if MAIN:
     parser = get_parser()
@@ -48,12 +77,12 @@ if MAIN:
     parser.add_argument("--ccs_batch_size", type=int, default=-1)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--ccs_device", type=str, default="cuda")
-    parser.add_argument("--linear", action="store_true")
-    parser.add_argument('--hidden-size', type=int, default=100)
+    parser.add_argument('--hidden-size', type=int, default=None)
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--var_normalize", action="store_true")
     parser.add_argument('--eval_path', type=str, default='eval.json')
     parser.add_argument('--verbose-eval', action='store_true')
+    parser.add_argument('--plot-dir', type=str, default='plots')
 if RUNNING_FROM_IPYNB:
     args, _ = parser.parse_known_args()
     args.model_name = generation_args.model_name = 'deberta-l'
@@ -61,7 +90,7 @@ if RUNNING_FROM_IPYNB:
 else:
     args = parser.parse_args()
     # main(args, generation_args)
-
+LINEAR = args.hidden_size is None
     
 #%%
 # load hidden states and labels
@@ -95,24 +124,7 @@ save_eval('lr_test_acc', lr.score(x_test, y_test), args)
 #%%
 #### LR feature importance
 lr_fi = (x_train.std(0) * lr.coef_).squeeze()
-fig = px.bar(
-    y=lr_fi, 
-    title='LR feature importance',
-    labels={'y': 'importance', 'x': 'feature'},
-)
-fig.update_layout({
-    'title_x': 0.5
-})
-fig.show()
-#%%
-fig = px.histogram(
-    x=lr_fi, 
-    title='LR feature importance distribution',
-)
-fig.update_layout({
-    'title_x': 0.5,
-})
-fig.show()
+plot_feature_importance(lr_fi, 'LR', args)
 
 #%% [markdown]
 #### CCS
@@ -123,7 +135,6 @@ ccs = CCS(
     nepochs=args.nepochs, ntries=args.ntries, 
     lr=args.lr, batch_size=args.ccs_batch_size, 
     verbose=args.verbose, device=args.ccs_device, 
-    linear=args.linear, 
     hidden_size=args.hidden_size,
     weight_decay=args.weight_decay, 
     var_normalize=args.var_normalize
@@ -142,9 +153,20 @@ ccs_test_acc = ccs.get_acc(neg_hs_test, pos_hs_test, y_test)
 save_eval('ccs_test_acc', ccs_test_acc, args)
 print(f'Accuracy computed in {time.time() - t0_acc:.1f}s')
 
+#%%
+def ccs_pred_wrapper(x: np.ndarray):
+    x_tensor = torch.tensor(
+        x, dtype=torch.float, requires_grad=False, device=ccs.device
+    )
+    return ccs.best_probe(x_tensor).cpu().detach().numpy()
+
+#%%
+if LINEAR:
+    ccs_fi = (ccs.best_probe[0].weight * ccs.x1.std()).squeeze()
+    plot_feature_importance(ccs_fi, 'CCS', args)
+
 # %%
 # TODO:
-# * compute SHAP score for best_probe
 # * search model/data pairs
 # * relationship between spread and model size or type?
 # * find a model/data pair with a large LR/CCS spread then

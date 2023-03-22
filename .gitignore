@@ -4,3 +4,4 @@ generated_hidden_states
 *.ipynb
 submit code
 eval.json
+plots
