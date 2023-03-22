@@ -22,6 +22,7 @@ def plot_feature_importance(
     vec: Union[np.ndarray, torch.Tensor], label: str, a: argparse.Namespace,
 ):
     model_name = clean_name(a.model_name)
+    data_name = clean_name(a.dataset_name)
     label_clean = clean_name(label)
     if isinstance(vec, torch.Tensor):
         vec = vec.cpu().detach().numpy()
@@ -32,14 +33,13 @@ def plot_feature_importance(
     fig.update_layout({
         'title_x': 0.5,
     })
-    fig.show()
     if not os.path.exists(a.plot_dir):
         os.mkdir(a.plot_dir)
     off.plot(
         fig, 
         filename=os.path.join(
             a.plot_dir, 
-            f'{model_name}_{label_clean}_feature_importance.html'
+            f'{model_name}_{data_name}_{label_clean}_feature_importance.html'
         )
     )
     
@@ -55,7 +55,7 @@ def save_eval(key, val, args):
     """
     if args.verbose_eval:
         print(f'Setting {key}={val} for model={args.model_name}')
-    key = args.model_name + '__' + key
+    key = args.model_name + '__' + args.dataset_name + '__' + key
     if os.path.isfile(args.eval_path):
         with open(args.eval_path, 'r') as f:
             eval_d = json.load(f)
@@ -90,7 +90,6 @@ if RUNNING_FROM_IPYNB:
 else:
     args = parser.parse_args()
     # main(args, generation_args)
-LINEAR = args.hidden_size is None
     
 #%%
 # load hidden states and labels
@@ -146,12 +145,10 @@ ccs.repeated_train()
 print(f'Training completed in {time.time() - t0_train:.1f}s')
 #%%
 # evaluate
-t0_acc = time.time()
 ccs_train_acc = ccs.get_acc(neg_hs_train, pos_hs_train, y_train)
 save_eval('ccs_train_acc', ccs_train_acc, args)
 ccs_test_acc = ccs.get_acc(neg_hs_test, pos_hs_test, y_test)
 save_eval('ccs_test_acc', ccs_test_acc, args)
-print(f'Accuracy computed in {time.time() - t0_acc:.1f}s')
 
 #%%
 def ccs_pred_wrapper(x: np.ndarray):
@@ -161,7 +158,7 @@ def ccs_pred_wrapper(x: np.ndarray):
     return ccs.best_probe(x_tensor).cpu().detach().numpy()
 
 #%%
-if LINEAR:
+if ccs.linear:
     ccs_fi = (ccs.best_probe[0].weight * ccs.x1.std()).squeeze()
     plot_feature_importance(ccs_fi, 'CCS', args)
 

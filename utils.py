@@ -579,7 +579,7 @@ class CCS(LatentKnowledgeMethod):
         
         # probe
         self.hidden_size = hidden_size
-        self.linear = hidden_size is None
+        self.linear = hidden_size is None or (hidden_size == 0)
         self.probe = self.initialize_probe()
         self.best_probe = copy.deepcopy(self.probe)
 
