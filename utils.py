@@ -25,15 +25,24 @@ from datasets import load_dataset
 # This is just for convenience for common models. 
 # You can run whatever model you'd like.
 model_mapping = {
+    # smaller models
+    "gpt2-s": "gpt2-small",
+    "gpt2-m": "gpt2-medium",
+    "gpt-neo": "gpt-neo-125M",
+    "opt": "opt-125m",
+    "deberta-l": "microsoft/deberta-large-mnli",
+    "roberta-mnli": "roberta-large-mnli",
+    "unifiedqa-l": "allenai/unifiedqa-t5-large",
+    "stanford-a": "stanford-gpt2-small-a",
+    "stanford-b": "stanford-gpt2-small-b",
+    "pythia": "pythia-160m",
+
+    # XL models
     "gpt-j": "EleutherAI/gpt-j-6B",
     "T0pp": "bigscience/T0pp",
-    "unifiedqa": "allenai/unifiedqa-t5-11b",
+    "unifiedqa-11b": "allenai/unifiedqa-t5-11b",
     "T5": "t5-11b",
-    "deberta-mnli": "microsoft/deberta-xxlarge-v2-mnli",
-    "deberta-xxl": "microsoft/deberta-xxlarge-v2",
-    "deberta-xl": "microsoft/deberta-v2-xlarge",
-    "deberta-l": "microsoft/deberta-v3-large",
-    "roberta-mnli": "roberta-large-mnli",
+    "deberta-xxl": "microsoft/deberta-xxlarge-v2-mnli",
 }
 
 
@@ -548,7 +557,7 @@ class LatentKnowledgeMethod(object):
 class CCS(LatentKnowledgeMethod):
     def __init__(
         self, x0, x1, nepochs=1000, ntries=10, lr=1e-3, batch_size=-1, 
-        verbose=False, device="cuda", linear=True, hidden_size=None, 
+        verbose=False, device="cuda", hidden_size=None, 
         weight_decay=0.01, mean_normalize=True,
         var_normalize=False,
     ):
@@ -558,10 +567,6 @@ class CCS(LatentKnowledgeMethod):
             mean_normalize=mean_normalize, 
             var_normalize=var_normalize,
             device=device,
-        )
-        assert (
-            (hidden_size is None and linear) or 
-            (hidden_size is not None and not linear)
         )
 
         # training
@@ -573,8 +578,8 @@ class CCS(LatentKnowledgeMethod):
         self.weight_decay = weight_decay
         
         # probe
-        self.linear = linear
         self.hidden_size = hidden_size
+        self.linear = hidden_size is None
         self.probe = self.initialize_probe()
         self.best_probe = copy.deepcopy(self.probe)
 
