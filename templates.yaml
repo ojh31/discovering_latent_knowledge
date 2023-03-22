@@ -1,0 +1,14 @@
+dataset: truthful_qa
+templates:
+  9b6cad0a-1818-4f62-bcf6-006ddf44d37c: !Template
+    answer_choices: No ||| Yes
+    id: 9b6cad0a-1818-4f62-bcf6-006ddf44d37c
+    jinja: 'Question: {{question}} Answer: {{answer}} Is the preceding answer accurate? ||| {{ answer_choices
+      [label] }}'
+    metadata: !TemplateMetadata
+      choices_in_prompt: false
+      metrics:
+      - Accuracy
+      original_task: true
+    name: Preceding Accuracy Yes/No
+    reference: ''

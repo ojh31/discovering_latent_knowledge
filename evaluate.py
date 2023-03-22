@@ -151,23 +151,9 @@ ccs_test_acc = ccs.get_acc(neg_hs_test, pos_hs_test, y_test)
 save_eval('ccs_test_acc', ccs_test_acc, args)
 
 #%%
-def ccs_pred_wrapper(x: np.ndarray):
-    x_tensor = torch.tensor(
-        x, dtype=torch.float, requires_grad=False, device=ccs.device
-    )
-    return ccs.best_probe(x_tensor).cpu().detach().numpy()
-
-#%%
 if ccs.linear:
     ccs_fi = (ccs.best_probe[0].weight * ccs.x1.std()).squeeze()
     plot_feature_importance(ccs_fi, 'CCS', args)
 
 # %%
-# TODO:
-# * search model/data pairs
-# * relationship between spread and model size or type?
-# * find a model/data pair with a large LR/CCS spread then
-#   * sweep hyperparameter sweeps
-#   * experiment with normalisation
-#   * experiment with transfer learning
-# * look at examples where final-layer and all-layer strongly disagree
+

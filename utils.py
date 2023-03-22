@@ -1,7 +1,7 @@
 import os
-import functools
 import argparse
 import copy
+import yaml
 
 import numpy as np
 import pandas as pd
@@ -60,6 +60,7 @@ def get_parser():
     # setting up data
     parser.add_argument("--dataset_name", type=str, default="imdb", help="Name of the dataset to use")
     parser.add_argument("--split", type=str, default="test", help="Which split of the dataset to use")
+    parser.add_argument("--config-name", type=str, default=None, help="Name argument to pass to load_dataset")
     parser.add_argument("--prompt_idx", type=int, default=0, help="Which prompt to use")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size to use")
     parser.add_argument("--num_examples", type=int, default=1000, help="Number of examples to generate")
@@ -184,8 +185,10 @@ class ContrastDataset(Dataset):
         prompt_name_list = list(all_prompts.name_to_id_mapping.keys())
         self.prompt = all_prompts[prompt_name_list[prompt_idx]]
 
+        self.is_multiple_choice = 'mc1_targets' in self.raw_dataset[0]
+
     def __len__(self):
-        return len(self.raw_dataset)
+        return len(self.raw_dataset) * (2 if self.is_multiple_choice else 1)
 
     def encode(self, nl_prompt):
         """
@@ -269,8 +272,11 @@ class ContrastDataset(Dataset):
 
     def __getitem__(self, index):
         # get the original example
+        is_odd = None
+        if self.is_multiple_choice:
+            is_odd = index % 2
+            index //= 2
         data = self.raw_dataset[int(index)]
-        text, true_answer = data["text"], data["label"]
 
         # get the possible labels
         # (for simplicity assume the binary case for contrast pairs)
@@ -283,8 +289,17 @@ class ContrastDataset(Dataset):
 
         # reconvert to dataset format but with fake/candidate labels to 
         # create the contrast pair
-        neg_example = {"text": text, "label": 0}
-        pos_example = {"text": text, "label": 1}
+        if self.is_multiple_choice:
+            question = data['question']
+            answer = data['mc1_targets']['choices'][is_odd]
+            true_answer = data['mc1_targets']['labels'][is_odd]
+            neg_example = {"question": question, "answer": answer, "label": 0}
+            pos_example = {"question": question, "answer": answer, "label": 1}
+        else:
+            text = data.get('text', data.get('content'))
+            true_answer = data["label"]
+            neg_example = {"text": text, "label": 0}
+            pos_example = {"text": text, "label": 1}
 
         # construct contrast pairs by answering the prompt with the two different possible labels
         # (for example, label 0 might be mapped to "no" and label 1 might be mapped to "yes")
@@ -309,22 +324,37 @@ class ContrastDataset(Dataset):
 
         # return the tokenized inputs, the text prompts, and the true label
         return neg_ids, pos_ids, neg_prompt, pos_prompt, true_answer
+    
+
+def get_templates(dataset_name: str) -> DatasetTemplates:
+    all_prompts = DatasetTemplates(dataset_name)
+    if len(all_prompts) == 0 and dataset_name == 'truthful_qa':
+        yaml_dict = yaml.load(open('templates.yaml', "r"), Loader=yaml.FullLoader)
+        all_prompts.templates = yaml_dict[all_prompts.TEMPLATES_KEY]
+        all_prompts.sync_mapping()
+    return all_prompts
 
     
 def get_dataloader(
-        dataset_name, split, tokenizer, prompt_idx, batch_size=16, num_examples=1000,
-        model_type="encoder_decoder", use_decoder=False, device="cuda", pin_memory=True, num_workers=1
+    dataset_name, split, tokenizer, prompt_idx, batch_size=16, num_examples=1000,
+    model_type="encoder_decoder", use_decoder=False, device="cuda", pin_memory=True, 
+    num_workers=1, config_name=None,
 ):
     """
-    Creates a dataloader for a given dataset (and its split), tokenizer, and prompt index
+    Creates a dataloader for a given dataset (and its split), tokenizer, and 
+    prompt index
 
-    Takes a random subset of (at most) num_examples samples from the dataset that are not truncated by the tokenizer.
+    Takes a random subset of (at most) num_examples samples from 
+    the dataset that are not truncated by the tokenizer.
     """
     # load the raw dataset
-    raw_dataset = load_dataset(dataset_name)[split]
+    ds = load_dataset(dataset_name, name=config_name)
+    if split == 'test' and split not in ds:
+        split = 'validation'
+    raw_dataset = ds[split]
 
     # load all the prompts for that dataset
-    all_prompts = DatasetTemplates(dataset_name)
+    all_prompts = get_templates(dataset_name=dataset_name)
 
     # create the ConstrastDataset
     contrast_dataset = ContrastDataset(raw_dataset, tokenizer, all_prompts, prompt_idx, 
@@ -339,7 +369,7 @@ def get_dataloader(
     prompt = all_prompts[prompt_name_list[prompt_idx]]
     keep_idxs = []
     for idx in random_idxs:
-        question, answer = prompt.apply(raw_dataset[int(idx)])
+        question, answer = contrast_dataset[int(idx)][-2]
         input_text = question + " " + answer
         if len(tokenizer.encode(input_text, truncation=False)) < tokenizer.model_max_length - 2:  # include small margin to be conservative
             keep_idxs.append(idx)

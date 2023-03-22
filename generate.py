@@ -12,7 +12,8 @@ def main(args):
         args.dataset_name, args.split, tokenizer, args.prompt_idx, 
         batch_size=args.batch_size, 
         num_examples=args.num_examples, model_type=model_type, 
-        use_decoder=args.use_decoder, device=args.device
+        use_decoder=args.use_decoder, device=args.device, 
+        config_name=args.config_name,
     )
 
     # Get the hidden states and labels
