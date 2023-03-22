@@ -24,8 +24,8 @@ df
 # %%
 # Train vs. test
 fig = px.line(
-    df, x='split', y='accuracy', color='dataset_name', 
-    facet_col='reg', facet_row='model_name'
+    df, x='split', y='accuracy', color='reg', 
+    facet_col='dataset_name', facet_row='model_name'
 )
 fig.show()
 
