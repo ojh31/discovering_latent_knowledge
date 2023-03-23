@@ -12,3 +12,111 @@ templates:
       original_task: true
     name: Preceding Accuracy Yes/No
     reference: ''
+  56203e1f-0af4-46be-ba7b-53e3131f8ef5: !Template
+    answer_choices: false ||| true
+    id: 56203e1f-0af4-46be-ba7b-53e3131f8ef5
+    jinja: 'Question: {{question}} Answer: {{answer}} Is the preceding answer {{"true or false"}}? ||| {{ answer_choices
+      [label] }}'
+    metadata: !TemplateMetadata
+      choices_in_prompt: true
+      metrics:
+      - Accuracy
+      original_task: true
+    name: Preceding true false
+    reference: ''
+  47869c66-5042-462f-ae2e-9be1391a12d9: !Template
+    answer_choices: wrong ||| right
+    id: 47869c66-5042-462f-ae2e-9be1391a12d9
+    jinja: 'Question: {{question}} Answer: {{answer}} Is the preceding answer {{"right or wrong"}}? ||| {{ answer_choices
+      [label] }}'
+    metadata: !TemplateMetadata
+      choices_in_prompt: true
+      metrics:
+      - Accuracy
+      original_task: true
+    name: Preceding Accuracy Yes No
+    reference: ''
+  880e1412-ff55-472d-bdde-c8c4ebb84d0a: !Template
+    answer_choices: No ||| Yes
+    id: 880e1412-ff55-472d-bdde-c8c4ebb84d0a
+    jinja: 'Question: {{question}} Answer: {{answer}} Is the preceding answer accurate? ||| {{ answer_choices
+      [label] }}'
+    metadata: !TemplateMetadata
+      choices_in_prompt: false
+      metrics:
+      - Accuracy
+      original_task: true
+    name: Preceding Accuracy Yes No
+    reference: ''
+  55750b1f-bada-4382-a63f-19879a5dd54f: !Template
+    answer_choices: No ||| Yes
+    id: 55750b1f-bada-4382-a63f-19879a5dd54f
+    jinja: 'Question: {{question}} Answer: {{answer}} Is the preceding answer correct? ||| {{ answer_choices
+      [label] }}'
+    metadata: !TemplateMetadata
+      choices_in_prompt: false
+      metrics:
+      - Accuracy
+      original_task: true
+    name: Preceding Correct Yes/No
+    reference: ''
+  f6839576-96e6-4e8e-9094-7546b8241c45: !Template
+    answer_choices: false ||| true
+    id: f6839576-96e6-4e8e-9094-7546b8241c45
+    jinja: 'Question: {{question}} Answer: {{answer}} The preceding answer is ||| {{ answer_choices
+      [label] }}'
+    metadata: !TemplateMetadata
+      choices_in_prompt: false
+      metrics:
+      - Accuracy
+      original_task: true
+    name: Preceding Answer true false
+    reference: ''
+  b5efa839-41c9-4b63-9dd2-00988b8ec074: !Template
+    answer_choices: incorrect ||| correct
+    id: b5efa839-41c9-4b63-9dd2-00988b8ec074
+    jinja: 'Question: {{question}} Answer: {{answer}} The preceding answer is factually ||| {{ answer_choices
+      [label] }}'
+    metadata: !TemplateMetadata
+      choices_in_prompt: false
+      metrics:
+      - Accuracy
+      original_task: true
+    name: Preceding Factuality incorrect correct
+    reference: ''
+  9affefab-102b-4f2a-9b16-ea8353b51132: !Template
+    answer_choices: No ||| Yes
+    id: 9affefab-102b-4f2a-9b16-ea8353b51132
+    jinja: 'Question: {{question}} Answer: {{answer}} Is the preceding answer factual? ||| {{ answer_choices
+      [label] }}'
+    metadata: !TemplateMetadata
+      choices_in_prompt: false
+      metrics:
+      - Accuracy
+      original_task: true
+    name: Preceding Factuality Yes No
+    reference: ''
+  03aac418-99d4-4d4d-967d-364f8ec9db88: !Template
+    answer_choices: false ||| true
+    id: 03aac418-99d4-4d4d-967d-364f8ec9db88
+    jinja: 'Question: {{question}} Answer: {{answer}} Fact Check: This is ||| {{ answer_choices
+      [label] }}'
+    metadata: !TemplateMetadata
+      choices_in_prompt: false
+      metrics:
+      - Accuracy
+      original_task: true
+    name: Fact Check
+    reference: ''
+  08389b67-8ff1-43f3-b31e-f40ba281e142: !Template
+    answer_choices: No ||| Yes
+    id: 08389b67-8ff1-43f3-b31e-f40ba281e142
+    jinja: 'Question: {{question}} Answer: {{answer}} Is this a myth? ||| {{ answer_choices
+      [label] }}'
+    metadata: !TemplateMetadata
+      choices_in_prompt: false
+      metrics:
+      - Accuracy
+      original_task: true
+    name: Preceding Accuracy Yes No
+    reference: ''
