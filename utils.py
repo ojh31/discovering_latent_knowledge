@@ -1,10 +1,9 @@
 import os
 import argparse
-import copy
+from typing import Union
 import yaml
 
 import numpy as np
-import pandas as pd
 from tqdm import tqdm
 
 import torch
@@ -60,7 +59,7 @@ def get_parser():
     # setting up data
     parser.add_argument("--dataset_name", type=str, default="imdb", help="Name of the dataset to use")
     parser.add_argument("--split", type=str, default="test", help="Which split of the dataset to use")
-    parser.add_argument("--config-name", type=str, default=None, help="Name argument to pass to load_dataset")
+    parser.add_argument("--config_name", type=str, default=None, help="Name argument to pass to load_dataset")
     parser.add_argument("--prompt_idx", type=int, default=0, help="Which prompt to use")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size to use")
     parser.add_argument("--num_examples", type=int, default=1000, help="Number of examples to generate")
@@ -113,6 +112,22 @@ def load_model(model_name, cache_dir=None, parallelize=False, device="cuda"):
     return model, tokenizer, model_type
 
 
+def args_to_filename(args: Union[dict, argparse.Namespace]):
+    if isinstance(args, argparse.Namespace):
+        args = vars(args)
+    exclude_keys = [
+        "save_dir", "cache_dir", "device", "verbose_eval", "eval_path",
+        "batch_size",
+    ]
+    return "__".join([
+        '{}_{}'.format(k, v) for k, v in args.items() if k not in exclude_keys
+    ])
+
+
+def generations_filename(args, generation_type):
+    return generation_type + "__" + args_to_filename(args) + ".npy".format(generation_type)
+
+
 def save_generations(generation, args, generation_type):
     """
     Input: 
@@ -122,10 +137,7 @@ def save_generations(generation, args, generation_type):
 
     Saves the generations to an appropriate directory.
     """
-    # construct the filename based on the args
-    arg_dict = vars(args)
-    exclude_keys = ["save_dir", "cache_dir", "device"]
-    filename = generation_type + "__" + "__".join(['{}_{}'.format(k, v) for k, v in arg_dict.items() if k not in exclude_keys]) + ".npy".format(generation_type)
+    filename = generations_filename(args, generation_type)
 
     # create save directory if it doesn't exist
     if not os.path.exists(args.save_dir):
@@ -136,10 +148,7 @@ def save_generations(generation, args, generation_type):
 
 
 def load_single_generation(args, generation_type="hidden_states"):
-    # use the same filename as in save_generations
-    arg_dict = vars(args)
-    exclude_keys = ["save_dir", "cache_dir", "device"]
-    filename = generation_type + "__" + "__".join(['{}_{}'.format(k, v) for k, v in arg_dict.items() if k not in exclude_keys]) + ".npy".format(generation_type)
+    filename = generations_filename(args, generation_type)
     return np.load(os.path.join(args.save_dir, filename))
 
 
@@ -412,6 +421,8 @@ def get_individual_hidden_states(
     If specify_encoder is True, uses "encoder_hidden_states" instead of "hidden_states"
     This is necessary for getting the encoder hidden states for encoder-decoder models,
     but it is not necessary for encoder-only or decoder-only models.
+
+    Output is moved to cpu
     """
     if use_decoder:
         assert "decoder" in model_type
@@ -450,9 +461,10 @@ def get_individual_hidden_states(
         mask = batch_ids["decoder_attention_mask"] if (
             model_type == "encoder_decoder" and use_decoder
         ) else batch_ids["attention_mask"]
-        first_mask_loc = get_first_mask_loc(mask).squeeze()
+        first_mask_loc = get_first_mask_loc(mask).squeeze().detach().cpu()
         final_hs = hs[
-            torch.arange(hs.size(0)), first_mask_loc+token_idx
+            torch.arange(hs.size(0)), 
+            first_mask_loc+token_idx
         ]  # (bs, dim, num_layers)
     
     return final_hs
@@ -505,6 +517,8 @@ def get_all_hidden_states(
     return all_neg_hs, all_pos_hs, all_gt_labels
 
 ############# CCS #############
+
+
 class MLPProbe(nn.Module):
     def __init__(self, d, hidden_size):
         super().__init__()
@@ -521,8 +535,12 @@ class LatentKnowledgeMethod(object):
 
     def __init__(
             self, 
-            x0: torch.Tensor, 
-            x1: torch.Tensor, 
+            neg_hs_train: torch.Tensor, 
+            pos_hs_train: torch.Tensor, 
+            y_train: torch.Tensor,
+            neg_hs_test: torch.Tensor,
+            pos_hs_test: torch.Tensor,
+            y_test: torch.Tensor,
             mean_normalize: bool = True,
             var_normalize: bool = True,
             device: str = 'cuda',
@@ -535,9 +553,14 @@ class LatentKnowledgeMethod(object):
         self.device = device
         self.mean_normalize = mean_normalize
         self.var_normalize = var_normalize
-        self.x0 = self.normalize(x0)
-        self.x1 = self.normalize(x1)
-        self.d = self.x0.shape[-1]
+        self.neg_hs_train = self.normalize(neg_hs_train)
+        self.pos_hs_train = self.normalize(pos_hs_train)
+        self.y_train = y_train
+        self.neg_hs_test = self.normalize(neg_hs_test)
+        self.pos_hs_test = self.normalize(pos_hs_test)
+        self.y_test = y_test
+        self.d = self.neg_hs_train.shape[-1]
+        self.best_probe = None
 
     def normalize(self, x):
         """
@@ -545,32 +568,31 @@ class LatentKnowledgeMethod(object):
         If self.var_normalize, also divides by the standard deviation
         """
         if self.mean_normalize:
-            normalized_x = x - x.mean(axis=0, keepdims=True)
+            x = x - x.mean(axis=0, keepdims=True)
         if self.var_normalize:
-            normalized_x /= normalized_x.std(axis=0, keepdims=True)
-
-        return normalized_x
+            x /= x.std(axis=0, keepdims=True)
+        return x
     
     def get_tensor_data(self):
         """
         Returns x0, x1 as appropriate tensors (rather than np arrays)
         """
-        x0 = torch.tensor(self.x0, dtype=torch.float, requires_grad=False, device=self.device)
-        x1 = torch.tensor(self.x1, dtype=torch.float, requires_grad=False, device=self.device)
+        x0 = torch.tensor(self.neg_hs_train, dtype=torch.float, requires_grad=False, device=self.device)
+        x1 = torch.tensor(self.pos_hs_train, dtype=torch.float, requires_grad=False, device=self.device)
         return x0, x1
     
-    def get_acc(self, x0_test, x1_test, y_test):
+    def get_acc(self, x0_val, x1_val, y_val):
         """
         Computes accuracy for the current parameters on the given test inputs
         """
         x0 = torch.tensor(
-            self.normalize(x0_test), 
+            x0_val, 
             dtype=torch.float, 
             requires_grad=False, 
             device=self.device
         )
         x1 = torch.tensor(
-            self.normalize(x1_test), 
+            x1_val, 
             dtype=torch.float, 
             requires_grad=False, 
             device=self.device
@@ -579,98 +601,16 @@ class LatentKnowledgeMethod(object):
             p0, p1 = self.best_probe(x0), self.best_probe(x1)
         avg_confidence = 0.5 * (p0 + (1 - p1))
         predictions = (avg_confidence.detach().cpu().numpy() < 0.5).astype(int)[:, 0]
-        acc = (predictions == y_test).mean()
+        acc = (predictions == y_val).mean()
         acc = max(acc, 1 - acc)
         return acc
     
-
-class CCS(LatentKnowledgeMethod):
-    def __init__(
-        self, x0, x1, nepochs=1000, ntries=10, lr=1e-3, batch_size=-1, 
-        verbose=False, device="cuda", hidden_size=None, 
-        weight_decay=0.01, mean_normalize=True,
-        var_normalize=False,
-    ):
-        super().__init__(
-            x0, 
-            x1, 
-            mean_normalize=mean_normalize, 
-            var_normalize=var_normalize,
-            device=device,
+    def get_train_acc(self):
+        return self.get_acc(
+            self.neg_hs_train, self.pos_hs_train, self.y_train,
         )
-
-        # training
-        self.nepochs = nepochs
-        self.ntries = ntries
-        self.lr = lr
-        self.verbose = verbose
-        self.batch_size = batch_size
-        self.weight_decay = weight_decay
-        
-        # probe
-        self.hidden_size = hidden_size
-        self.linear = hidden_size is None or (hidden_size == 0)
-        self.probe = self.initialize_probe()
-        self.best_probe = copy.deepcopy(self.probe)
-
-        
-    def initialize_probe(self):
-        if self.linear:
-            self.probe = nn.Sequential(nn.Linear(self.d, 1), nn.Sigmoid())
-        else:
-            self.probe = MLPProbe(self.d, self.hidden_size)
-        self.probe.to(self.device)    
     
-
-    def get_loss(self, p0, p1):
-        """
-        Returns the CCS loss for two probabilities each of shape (n,1) or (n,)
-        """
-        informative_loss = (torch.min(p0, p1)**2).mean(0)
-        consistent_loss = ((p0 - (1-p1))**2).mean(0)
-        return informative_loss + consistent_loss
-    
-        
-    def train(self):
-        """
-        Does a single training run of nepochs epochs
-        """
-        x0, x1 = self.get_tensor_data()
-        permutation = torch.randperm(len(x0))
-        x0, x1 = x0[permutation], x1[permutation]
-        
-        # set up optimizer
-        optimizer = torch.optim.AdamW(self.probe.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        
-        batch_size = len(x0) if self.batch_size == -1 else self.batch_size
-        nbatches = len(x0) // batch_size
-
-        # Start training (full batch)
-        for epoch in range(self.nepochs):
-            for j in range(nbatches):
-                x0_batch = x0[j*batch_size:(j+1)*batch_size]
-                x1_batch = x1[j*batch_size:(j+1)*batch_size]
-            
-                # probe
-                p0, p1 = self.probe(x0_batch), self.probe(x1_batch)
-
-                # get the corresponding loss
-                loss = self.get_loss(p0, p1)
-
-                # update the parameters
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-
-        return loss.detach().cpu().item()
-    
-    def repeated_train(self):
-        best_loss = np.inf
-        for train_num in range(self.ntries):
-            self.initialize_probe()
-            loss = self.train()
-            if loss < best_loss:
-                self.best_probe = copy.deepcopy(self.probe)
-                best_loss = loss
-
-        return best_loss
+    def get_test_acc(self):
+        return self.get_acc(
+            self.neg_hs_test, self.pos_hs_test, self.y_test,
+        )
