@@ -4,6 +4,12 @@ import unittest as ut
 from dlk.generate import main
 
 
+def test_generated_file(filename: str):
+    ref = np.load(os.path.join('reference_hidden_states', filename))
+    act = np.load(os.path.join('generated_hidden_states', filename))
+    np.testing.assert_allclose(ref, act)
+
+
 class TestGenerate(ut.TestCase):
 
     def setUp(self):
@@ -21,12 +27,16 @@ class TestGenerate(ut.TestCase):
             "--prompt_idx",
             "0",
         ])
+        self.filenames = os.listdir('reference_hidden_states')
 
-    def test_generated(self):
-        for filename in os.listdir('reference_hidden_states'):
-            ref = np.load(os.path.join('reference_hidden_states', filename))
-            act = np.load(os.path.join('generated_hidden_states', filename))
-            np.testing.assert_allclose(ref, act)
+    def test_labels(self):
+        test_generated_file(self.filenames[0])
+
+    def test_negatives(self):
+        test_generated_file(self.filenames[1])
+
+    def test_positives(self):
+        test_generated_file(self.filenames[2])
 
 
 if __name__ == '__main__':
