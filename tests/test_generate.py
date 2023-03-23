@@ -14,7 +14,7 @@ class TestGenerate(ut.TestCase):
             "deberta-l",
             "--dataset_name",
             "truthful_qa",
-            "--config-name",
+            "--config_name",
             "multiple_choice",
             "--num_examples",
             "10",
