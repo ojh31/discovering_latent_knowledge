@@ -1,6 +1,7 @@
 import os
 import argparse
 import copy
+from typing import Union
 import yaml
 
 import numpy as np
@@ -114,6 +115,20 @@ def load_model(model_name, cache_dir=None, parallelize=False, device="cuda"):
     return model, tokenizer, model_type
 
 
+def args_to_filename(args: Union[dict, argparse.Namespace]):
+    if isinstance(args, argparse.Namespace):
+        args = vars(args)
+    exclude_keys = [
+        "save_dir", "cache_dir", "device", "verbose_eval", "eval_path",
+    ]
+    return "__".join([
+        '{}_{}'.format(k, v) for k, v in args.items() if k not in exclude_keys
+    ])
+
+
+def generations_filename(args, generation_type):
+    return generation_type + "__" + args_to_filename(args) + ".npy".format(generation_type)
+
 def save_generations(generation, args, generation_type):
     """
     Input: 
@@ -123,11 +138,7 @@ def save_generations(generation, args, generation_type):
 
     Saves the generations to an appropriate directory.
     """
-    # construct the filename based on the args
-    arg_dict = vars(args)
-    exclude_keys = ["save_dir", "cache_dir", "device"]
-    filename = generation_type + "__" + "__".join(['{}_{}'.format(k, v) for k, v in arg_dict.items() if k not in exclude_keys]) + ".npy".format(generation_type)
-
+    filename = generations_filename(args, generation_type)
     # create save directory if it doesn't exist
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
@@ -137,11 +148,8 @@ def save_generations(generation, args, generation_type):
 
 
 def load_single_generation(args, generation_type="hidden_states"):
-    # use the same filename as in save_generations
-    arg_dict = vars(args)
-    exclude_keys = ["save_dir", "cache_dir", "device"]
-    filename = generation_type + "__" + "__".join(['{}_{}'.format(k, v) for k, v in arg_dict.items() if k not in exclude_keys]) + ".npy".format(generation_type)
-    return np.load(os.path.join(args.save_dir, filename))
+   filename = generations_filename(args, generation_type)
+   return np.load(os.path.join(args.save_dir, filename))
 
 
 def load_all_generations(args):
@@ -453,7 +461,7 @@ def get_individual_hidden_states(
         mask = batch_ids["decoder_attention_mask"] if (
             model_type == "encoder_decoder" and use_decoder
         ) else batch_ids["attention_mask"]
-        first_mask_loc = get_first_mask_loc(mask).squeeze()
+        first_mask_loc = get_first_mask_loc(mask).squeeze().detach().cpu()
         final_hs = hs[
             torch.arange(hs.size(0)), first_mask_loc+token_idx
         ]  # (bs, dim, num_layers)
