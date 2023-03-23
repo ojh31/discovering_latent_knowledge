@@ -64,6 +64,7 @@ def get_parser():
     parser.add_argument("--prompt_idx", type=int, default=0, help="Which prompt to use")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size to use")
     parser.add_argument("--num_examples", type=int, default=1000, help="Number of examples to generate")
+    parser.add_argument('--seed', type=int, default=0, help="Seed to ensure determinism")
     # which hidden states we extract
     parser.add_argument("--use_decoder", action="store_true", help="Whether to use the decoder; only relevant if model_type is encoder-decoder. Uses encoder by default (which usually -- but not always -- works better)")
     parser.add_argument("--layer", type=int, default=-1, help="Which layer to use (if not all layers)")
@@ -337,6 +338,7 @@ def get_templates(dataset_name: str) -> DatasetTemplates:
     
 def get_dataloader(
     dataset_name, split, tokenizer, prompt_idx, batch_size=16, num_examples=1000,
+    seed=0,
     model_type="encoder_decoder", use_decoder=False, device="cuda", pin_memory=True, 
     num_workers=1, config_name=None,
 ):
@@ -362,6 +364,7 @@ def get_dataloader(
                                        device=device)
 
     # get a random permutation of the indices; we'll take the first num_examples of these that do not get truncated
+    np.random.seed(seed=seed)
     random_idxs = np.random.permutation(len(contrast_dataset))
 
     # remove examples that would be truncated (since this messes up contrast pairs)
@@ -526,7 +529,6 @@ class LatentKnowledgeMethod(object):
             mean_normalize: bool = True,
             var_normalize: bool = True,
             device: str = 'cuda',
-            **kwargs
     ) -> None:
         '''
         x0: negative hidden states, shape [num_examples, num_hidden_states]
@@ -586,7 +588,7 @@ class LatentKnowledgeMethod(object):
 
 class CCS(LatentKnowledgeMethod):
     def __init__(
-        self, x0, x1, nepochs=1000, ntries=10, lr=1e-3, batch_size=-1, 
+        self, x0, x1, nepochs=1000, ntries=10, seed=0, lr=1e-3, batch_size=-1, 
         verbose=False, device="cuda", hidden_size=None, 
         weight_decay=0.01, mean_normalize=True,
         var_normalize=False,
@@ -606,6 +608,7 @@ class CCS(LatentKnowledgeMethod):
         self.verbose = verbose
         self.batch_size = batch_size
         self.weight_decay = weight_decay
+        self.seed = seed
         
         # probe
         self.hidden_size = hidden_size
@@ -615,6 +618,7 @@ class CCS(LatentKnowledgeMethod):
 
         
     def initialize_probe(self):
+        torch.manual_seed(self.seed)
         if self.linear:
             self.probe = nn.Sequential(nn.Linear(self.d, 1), nn.Sigmoid())
         else:
@@ -635,6 +639,7 @@ class CCS(LatentKnowledgeMethod):
         """
         Does a single training run of nepochs epochs
         """
+        torch.manual_seed(self.seed)
         x0, x1 = self.get_tensor_data()
         permutation = torch.randperm(len(x0))
         x0, x1 = x0[permutation], x1[permutation]
