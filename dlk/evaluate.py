@@ -38,7 +38,8 @@ def plot_feature_importance(
         filename=os.path.join(
             a.plot_dir, 
             f'{model_name}_{data_name}_{label_clean}_feature_importance.html'
-        )
+        ),
+        auto_open=False,
     )
     
 
