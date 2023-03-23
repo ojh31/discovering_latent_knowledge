@@ -148,8 +148,8 @@ def save_generations(generation, args, generation_type):
 
 
 def load_single_generation(args, generation_type="hidden_states"):
-   filename = generations_filename(args, generation_type)
-   return np.load(os.path.join(args.save_dir, filename))
+    filename = generations_filename(args, generation_type)
+    return np.load(os.path.join(args.save_dir, filename))
 
 
 def load_all_generations(args):
@@ -531,12 +531,12 @@ class MLPProbe(nn.Module):
 class LatentKnowledgeMethod(object):
 
     def __init__(
-            self, 
-            x0: torch.Tensor, 
-            x1: torch.Tensor, 
-            mean_normalize: bool = True,
-            var_normalize: bool = True,
-            device: str = 'cuda',
+        self, 
+        x0: torch.Tensor, 
+        x1: torch.Tensor, 
+        mean_normalize: bool = True,
+        var_normalize: bool = True,
+        device: str = 'cuda',
     ) -> None:
         '''
         x0: negative hidden states, shape [num_examples, num_hidden_states]
@@ -555,11 +555,11 @@ class LatentKnowledgeMethod(object):
         If self.var_normalize, also divides by the standard deviation
         """
         if self.mean_normalize:
-            normalized_x = x - x.mean(axis=0, keepdims=True)
+            x = x - x.mean(axis=0, keepdims=True)
         if self.var_normalize:
-            normalized_x /= normalized_x.std(axis=0, keepdims=True)
+            x /= x.std(axis=0, keepdims=True)
 
-        return normalized_x
+        return x
     
     def get_tensor_data(self):
         """
@@ -569,18 +569,18 @@ class LatentKnowledgeMethod(object):
         x1 = torch.tensor(self.x1, dtype=torch.float, requires_grad=False, device=self.device)
         return x0, x1
     
-    def get_acc(self, x0_test, x1_test, y_test):
+    def get_acc(self, x0_val, x1_val, y_val):
         """
         Computes accuracy for the current parameters on the given test inputs
         """
         x0 = torch.tensor(
-            self.normalize(x0_test), 
+            self.normalize(x0_val), 
             dtype=torch.float, 
             requires_grad=False, 
             device=self.device
         )
         x1 = torch.tensor(
-            self.normalize(x1_test), 
+            self.normalize(x1_val), 
             dtype=torch.float, 
             requires_grad=False, 
             device=self.device
@@ -589,7 +589,7 @@ class LatentKnowledgeMethod(object):
             p0, p1 = self.best_probe(x0), self.best_probe(x1)
         avg_confidence = 0.5 * (p0 + (1 - p1))
         predictions = (avg_confidence.detach().cpu().numpy() < 0.5).astype(int)[:, 0]
-        acc = (predictions == y_test).mean()
+        acc = (predictions == y_val).mean()
         acc = max(acc, 1 - acc)
         return acc
     
