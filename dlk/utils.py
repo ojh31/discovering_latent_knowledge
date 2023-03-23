@@ -1,7 +1,7 @@
 import os
 import argparse
+import copy
 from typing import Union
-import warnings
 import yaml
 
 import numpy as np
@@ -64,6 +64,7 @@ def get_parser():
     parser.add_argument("--prompt_idx", type=int, default=0, help="Which prompt to use")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size to use")
     parser.add_argument("--num_examples", type=int, default=1000, help="Number of examples to generate")
+    parser.add_argument('--seed', type=int, default=0, help="Seed to ensure determinism")
     # which hidden states we extract
     parser.add_argument("--use_decoder", action="store_true", help="Whether to use the decoder; only relevant if model_type is encoder-decoder. Uses encoder by default (which usually -- but not always -- works better)")
     parser.add_argument("--layer", type=int, default=-1, help="Which layer to use (if not all layers)")
@@ -127,7 +128,10 @@ def args_to_filename(args: Union[dict, argparse.Namespace]):
 def generations_filename(args, generation_type):
     return generation_type + "__" + args_to_filename(args) + ".npy".format(generation_type)
 
+<<<<<<< HEAD:utils.py
 
+=======
+>>>>>>> feature/deterministic:dlk/utils.py
 def save_generations(generation, args, generation_type):
     """
     Input: 
@@ -138,7 +142,10 @@ def save_generations(generation, args, generation_type):
     Saves the generations to an appropriate directory.
     """
     filename = generations_filename(args, generation_type)
+<<<<<<< HEAD:utils.py
 
+=======
+>>>>>>> feature/deterministic:dlk/utils.py
     # create save directory if it doesn't exist
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
@@ -346,6 +353,7 @@ def get_templates(dataset_name: str) -> DatasetTemplates:
     
 def get_dataloader(
     dataset_name, split, tokenizer, prompt_idx, batch_size=16, num_examples=1000,
+    seed=0,
     model_type="encoder_decoder", use_decoder=False, device="cuda", pin_memory=True, 
     num_workers=1, config_name=None,
 ):
@@ -371,6 +379,7 @@ def get_dataloader(
                                        device=device)
 
     # get a random permutation of the indices; we'll take the first num_examples of these that do not get truncated
+    np.random.seed(seed=seed)
     random_idxs = np.random.permutation(len(contrast_dataset))
 
     # remove examples that would be truncated (since this messes up contrast pairs)
@@ -538,13 +547,21 @@ class LatentKnowledgeMethod(object):
         neg_hs_train: torch.Tensor, 
         pos_hs_train: torch.Tensor, 
         y_train: torch.Tensor,
+<<<<<<< HEAD:utils.py
         neg_hs_test: torch.Tensor,
         pos_hs_test: torch.Tensor,
+=======
+        neg_hs_test: torch.Tensor, 
+        pos_hs_test: torch.Tensor, 
+>>>>>>> feature/deterministic:dlk/utils.py
         y_test: torch.Tensor,
         mean_normalize: bool = True,
         var_normalize: bool = True,
         device: str = 'cuda',
+<<<<<<< HEAD:utils.py
         **kwargs
+=======
+>>>>>>> feature/deterministic:dlk/utils.py
     ) -> None:
         '''
         x0: negative hidden states, shape [num_examples, num_hidden_states]
@@ -560,7 +577,10 @@ class LatentKnowledgeMethod(object):
         self.pos_hs_test = self.normalize(pos_hs_test)
         self.y_test = y_test
         self.d = self.neg_hs_train.shape[-1]
+<<<<<<< HEAD:utils.py
         self.best_probe = None
+=======
+>>>>>>> feature/deterministic:dlk/utils.py
 
     def normalize(self, x):
         """
@@ -569,6 +589,7 @@ class LatentKnowledgeMethod(object):
         """
         if self.mean_normalize:
             x = x - x.mean(axis=0, keepdims=True)
+<<<<<<< HEAD:utils.py
         else:
             warnings.warn(
                 'mean_normalize set to false'
@@ -579,20 +600,35 @@ class LatentKnowledgeMethod(object):
             warnings.warn(
                 'var_normalize set to false'
             )
+=======
+        if self.var_normalize:
+            x /= x.std(axis=0, keepdims=True)
+
+>>>>>>> feature/deterministic:dlk/utils.py
         return x
     
-    def get_tensor_data(self):
+    def get_tensor_data(self, x0=None, x1=None):
         """
         Returns x0, x1 as appropriate tensors (rather than np arrays)
         """
+<<<<<<< HEAD:utils.py
         x0 = torch.tensor(self.neg_hs_train, dtype=torch.float, requires_grad=False, device=self.device)
         x1 = torch.tensor(self.pos_hs_train, dtype=torch.float, requires_grad=False, device=self.device)
+=======
+        if x0 is None:
+            x0 = self.neg_hs_train
+        if x1 is None:
+            x1 = self.pos_hs_train
+        x0 = torch.tensor(x0, dtype=torch.float, requires_grad=False, device=self.device)
+        x1 = torch.tensor(x1, dtype=torch.float, requires_grad=False, device=self.device)
+>>>>>>> feature/deterministic:dlk/utils.py
         return x0, x1
     
     def get_acc(self, x0_val, x1_val, y_val):
         """
         Computes accuracy for the current parameters on the given test inputs
         """
+<<<<<<< HEAD:utils.py
         x0 = torch.tensor(
             x0_val, 
             dtype=torch.float, 
@@ -605,6 +641,9 @@ class LatentKnowledgeMethod(object):
             requires_grad=False, 
             device=self.device
         )
+=======
+        x0, x1 = self.get_tensor_data(x0_val, x1_val)
+>>>>>>> feature/deterministic:dlk/utils.py
         with torch.no_grad():
             p0, p1 = self.best_probe(x0), self.best_probe(x1)
         avg_confidence = 0.5 * (p0 + (1 - p1))
@@ -614,6 +653,7 @@ class LatentKnowledgeMethod(object):
         return acc
     
     def get_train_acc(self):
+<<<<<<< HEAD:utils.py
         return self.get_acc(
             self.neg_hs_train, self.pos_hs_train, self.y_train,
         )
@@ -622,3 +662,121 @@ class LatentKnowledgeMethod(object):
         return self.get_acc(
             self.neg_hs_test, self.pos_hs_test, self.y_test,
         )
+=======
+        return self.get_acc(self.neg_hs_train, self.pos_hs_train, self.y_train)
+    
+    def get_test_acc(self):
+        return self.get_acc(self.neg_hs_test, self.pos_hs_test, self.y_test)
+    
+
+class CCS(LatentKnowledgeMethod):
+    def __init__(
+        self, 
+        neg_hs_train: torch.Tensor, 
+        pos_hs_train: torch.Tensor, 
+        y_train: torch.Tensor,
+        neg_hs_test: torch.Tensor, 
+        pos_hs_test: torch.Tensor, 
+        y_test: torch.Tensor,
+        nepochs: int = 1000, 
+        ntries: int = 10, 
+        seed: int = 0, 
+        lr: int = 1e-3, 
+        batch_size: int = -1, 
+        verbose: bool = False, 
+        device: str = "cuda", 
+        hidden_size: int = 0, 
+        weight_decay: float = 0.01, 
+        mean_normalize: bool = True,
+        var_normalize: bool = False,
+    ):
+        super().__init__(
+            neg_hs_train=neg_hs_train, 
+            pos_hs_train=pos_hs_train, 
+            y_train=y_train,
+            neg_hs_test=neg_hs_test, 
+            pos_hs_test=pos_hs_test, 
+            y_test=y_test,
+            mean_normalize=mean_normalize, 
+            var_normalize=var_normalize,
+            device=device,
+        )
+
+        # training
+        self.nepochs = nepochs
+        self.ntries = ntries
+        self.lr = lr
+        self.verbose = verbose
+        self.batch_size = batch_size
+        self.weight_decay = weight_decay
+        self.seed = seed
+        
+        # probe
+        self.hidden_size = hidden_size
+        self.linear = hidden_size is None or (hidden_size == 0)
+        self.probe = self.initialize_probe()
+        self.best_probe = copy.deepcopy(self.probe)
+
+        
+    def initialize_probe(self):
+        if self.linear:
+            self.probe = nn.Sequential(nn.Linear(self.d, 1), nn.Sigmoid())
+        else:
+            self.probe = MLPProbe(self.d, self.hidden_size)
+        self.probe.to(self.device)    
+    
+
+    def get_loss(self, p0, p1):
+        """
+        Returns the CCS loss for two probabilities each of shape (n,1) or (n,)
+        """
+        informative_loss = (torch.min(p0, p1)**2).mean(0)
+        consistent_loss = ((p0 - (1-p1))**2).mean(0)
+        return informative_loss + consistent_loss
+    
+        
+    def train(self):
+        """
+        Does a single training run of nepochs epochs
+        """
+        x0, x1 = self.get_tensor_data()
+        permutation = torch.randperm(len(x0))
+        x0, x1 = x0[permutation], x1[permutation]
+        
+        # set up optimizer
+        optimizer = torch.optim.AdamW(self.probe.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        
+        batch_size = len(x0) if self.batch_size == -1 else self.batch_size
+        nbatches = len(x0) // batch_size
+
+        # Start training (full batch)
+        for epoch in range(self.nepochs):
+            for j in range(nbatches):
+                x0_batch = x0[j*batch_size:(j+1)*batch_size]
+                x1_batch = x1[j*batch_size:(j+1)*batch_size]
+            
+                # probe
+                p0, p1 = self.probe(x0_batch), self.probe(x1_batch)
+
+                # get the corresponding loss
+                loss = self.get_loss(p0, p1)
+
+                # update the parameters
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+        return loss.detach().cpu().item()
+    
+    def repeated_train(self):
+        torch.manual_seed(self.seed)
+        best_loss = np.inf
+        for train_num in range(self.ntries):
+            self.initialize_probe()
+            loss = self.train()
+            if loss < best_loss:
+                self.best_probe = copy.deepcopy(self.probe)
+                best_loss = loss
+
+        return best_loss
+>>>>>>> feature/deterministic:dlk/utils.py
