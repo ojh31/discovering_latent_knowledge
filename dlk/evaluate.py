@@ -126,7 +126,12 @@ def fit_ccs(
     args,
 ):
     ccs = CCS(
-        neg_hs_train, pos_hs_train, 
+        neg_hs_train=neg_hs_train, 
+        pos_hs_train=pos_hs_train, 
+        y_train=y_train,
+        neg_hs_test=neg_hs_test, 
+        pos_hs_test=pos_hs_test, 
+        y_test=y_test,
         nepochs=args.nepochs, ntries=args.ntries, 
         lr=args.lr, batch_size=args.ccs_batch_size, 
         verbose=args.verbose, device=args.ccs_device, 
@@ -138,13 +143,13 @@ def fit_ccs(
     t0_train = time.time()
     ccs.repeated_train()
     print(f'Training completed in {time.time() - t0_train:.1f}s')
-    ccs_train_acc = ccs.get_acc(neg_hs_train, pos_hs_train, y_train)
+    ccs_train_acc = ccs.get_train_acc()
     save_eval('ccs_train_acc', ccs_train_acc, args)
-    ccs_test_acc = ccs.get_acc(neg_hs_test, pos_hs_test, y_test)
+    ccs_test_acc = ccs.get_test_acc()
     save_eval('ccs_test_acc', ccs_test_acc, args)
 
     if ccs.linear:
-        ccs_fi = (ccs.best_probe[0].weight * ccs.x1.std()).squeeze()
+        ccs_fi = (ccs.best_probe[0].weight * ccs.pos_hs_train.std()).squeeze()
         plot_feature_importance(ccs_fi, 'CCS', args)
     return ccs_train_acc, ccs_test_acc
 

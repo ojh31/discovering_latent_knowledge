@@ -532,8 +532,12 @@ class LatentKnowledgeMethod(object):
 
     def __init__(
         self, 
-        x0: torch.Tensor, 
-        x1: torch.Tensor, 
+        neg_hs_train: torch.Tensor, 
+        pos_hs_train: torch.Tensor, 
+        y_train: torch.Tensor,
+        neg_hs_test: torch.Tensor, 
+        pos_hs_test: torch.Tensor, 
+        y_test: torch.Tensor,
         mean_normalize: bool = True,
         var_normalize: bool = True,
         device: str = 'cuda',
@@ -545,9 +549,13 @@ class LatentKnowledgeMethod(object):
         self.device = device
         self.mean_normalize = mean_normalize
         self.var_normalize = var_normalize
-        self.x0 = self.normalize(x0)
-        self.x1 = self.normalize(x1)
-        self.d = self.x0.shape[-1]
+        self.neg_hs_train = self.normalize(neg_hs_train)
+        self.pos_hs_train = self.normalize(pos_hs_train)
+        self.y_train = y_train
+        self.neg_hs_test = self.normalize(neg_hs_test)
+        self.pos_hs_test = self.normalize(pos_hs_test)
+        self.y_test = y_test
+        self.d = self.neg_hs_train.shape[-1]
 
     def normalize(self, x):
         """
@@ -561,30 +569,23 @@ class LatentKnowledgeMethod(object):
 
         return x
     
-    def get_tensor_data(self):
+    def get_tensor_data(self, x0=None, x1=None):
         """
         Returns x0, x1 as appropriate tensors (rather than np arrays)
         """
-        x0 = torch.tensor(self.x0, dtype=torch.float, requires_grad=False, device=self.device)
-        x1 = torch.tensor(self.x1, dtype=torch.float, requires_grad=False, device=self.device)
+        if x0 is None:
+            x0 = self.neg_hs_train
+        if x1 is None:
+            x1 = self.pos_hs_train
+        x0 = torch.tensor(x0, dtype=torch.float, requires_grad=False, device=self.device)
+        x1 = torch.tensor(x1, dtype=torch.float, requires_grad=False, device=self.device)
         return x0, x1
     
     def get_acc(self, x0_val, x1_val, y_val):
         """
         Computes accuracy for the current parameters on the given test inputs
         """
-        x0 = torch.tensor(
-            self.normalize(x0_val), 
-            dtype=torch.float, 
-            requires_grad=False, 
-            device=self.device
-        )
-        x1 = torch.tensor(
-            self.normalize(x1_val), 
-            dtype=torch.float, 
-            requires_grad=False, 
-            device=self.device
-        )
+        x0, x1 = self.get_tensor_data(x0_val, x1_val)
         with torch.no_grad():
             p0, p1 = self.best_probe(x0), self.best_probe(x1)
         avg_confidence = 0.5 * (p0 + (1 - p1))
@@ -593,17 +594,41 @@ class LatentKnowledgeMethod(object):
         acc = max(acc, 1 - acc)
         return acc
     
+    def get_train_acc(self):
+        return self.get_acc(self.neg_hs_train, self.pos_hs_train, self.y_train)
+    
+    def get_test_acc(self):
+        return self.get_acc(self.neg_hs_test, self.pos_hs_test, self.y_test)
+    
 
 class CCS(LatentKnowledgeMethod):
     def __init__(
-        self, x0, x1, nepochs=1000, ntries=10, seed=0, lr=1e-3, batch_size=-1, 
-        verbose=False, device="cuda", hidden_size=None, 
-        weight_decay=0.01, mean_normalize=True,
-        var_normalize=False,
+        self, 
+        neg_hs_train: torch.Tensor, 
+        pos_hs_train: torch.Tensor, 
+        y_train: torch.Tensor,
+        neg_hs_test: torch.Tensor, 
+        pos_hs_test: torch.Tensor, 
+        y_test: torch.Tensor,
+        nepochs: int = 1000, 
+        ntries: int = 10, 
+        seed: int = 0, 
+        lr: int = 1e-3, 
+        batch_size: int = -1, 
+        verbose: bool = False, 
+        device: str = "cuda", 
+        hidden_size: int = 0, 
+        weight_decay: float = 0.01, 
+        mean_normalize: bool = True,
+        var_normalize: bool = False,
     ):
         super().__init__(
-            x0, 
-            x1, 
+            neg_hs_train=neg_hs_train, 
+            pos_hs_train=pos_hs_train, 
+            y_train=y_train,
+            neg_hs_test=neg_hs_test, 
+            pos_hs_test=pos_hs_test, 
+            y_test=y_test,
             mean_normalize=mean_normalize, 
             var_normalize=var_normalize,
             device=device,
