@@ -618,7 +618,6 @@ class CCS(LatentKnowledgeMethod):
 
         
     def initialize_probe(self):
-        torch.manual_seed(self.seed)
         if self.linear:
             self.probe = nn.Sequential(nn.Linear(self.d, 1), nn.Sigmoid())
         else:
@@ -639,7 +638,6 @@ class CCS(LatentKnowledgeMethod):
         """
         Does a single training run of nepochs epochs
         """
-        torch.manual_seed(self.seed)
         x0, x1 = self.get_tensor_data()
         permutation = torch.randperm(len(x0))
         x0, x1 = x0[permutation], x1[permutation]
@@ -670,6 +668,7 @@ class CCS(LatentKnowledgeMethod):
         return loss.detach().cpu().item()
     
     def repeated_train(self):
+        torch.manual_seed(self.seed)
         best_loss = np.inf
         for train_num in range(self.ntries):
             self.initialize_probe()
