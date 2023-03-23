@@ -1,6 +1,7 @@
 import os
 import argparse
 from typing import Union
+import warnings
 import yaml
 
 import numpy as np
@@ -117,7 +118,6 @@ def args_to_filename(args: Union[dict, argparse.Namespace]):
         args = vars(args)
     exclude_keys = [
         "save_dir", "cache_dir", "device", "verbose_eval", "eval_path",
-        "batch_size",
     ]
     return "__".join([
         '{}_{}'.format(k, v) for k, v in args.items() if k not in exclude_keys
@@ -534,17 +534,17 @@ class MLPProbe(nn.Module):
 class LatentKnowledgeMethod(object):
 
     def __init__(
-            self, 
-            neg_hs_train: torch.Tensor, 
-            pos_hs_train: torch.Tensor, 
-            y_train: torch.Tensor,
-            neg_hs_test: torch.Tensor,
-            pos_hs_test: torch.Tensor,
-            y_test: torch.Tensor,
-            mean_normalize: bool = True,
-            var_normalize: bool = True,
-            device: str = 'cuda',
-            **kwargs
+        self, 
+        neg_hs_train: torch.Tensor, 
+        pos_hs_train: torch.Tensor, 
+        y_train: torch.Tensor,
+        neg_hs_test: torch.Tensor,
+        pos_hs_test: torch.Tensor,
+        y_test: torch.Tensor,
+        mean_normalize: bool = True,
+        var_normalize: bool = True,
+        device: str = 'cuda',
+        **kwargs
     ) -> None:
         '''
         x0: negative hidden states, shape [num_examples, num_hidden_states]
@@ -569,8 +569,16 @@ class LatentKnowledgeMethod(object):
         """
         if self.mean_normalize:
             x = x - x.mean(axis=0, keepdims=True)
+        else:
+            warnings.warn(
+                'mean_normalize set to false'
+            )
         if self.var_normalize:
             x /= x.std(axis=0, keepdims=True)
+        else:
+            warnings.warn(
+                'var_normalize set to false'
+            )
         return x
     
     def get_tensor_data(self):
