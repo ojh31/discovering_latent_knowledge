@@ -15,16 +15,34 @@ if __name__ == '__main__':
 # %%
 df = pd.Series(eval_d).reset_index()
 df.columns = ['full_name', 'accuracy']
-df['model_name'] = df.full_name.str.split('__').str[0]
-df['dataset_name'] = df.full_name.str.split('__').str[1]
-df['key'] = df.full_name.str.split('__').str[2]
-df['split'] = df.key.str.split('_').str[1]
-df['reg'] = df.key.str.split('_').str[0]
-df
+cols_to_extract = [
+    'model_name', 'dataset_name', 'partition', 'reg', 
+    'normalisation', 'weight_decay',
+    'hidden_size', 'nepochs', 'ntries',
+]
+for col in cols_to_extract:
+    df[col] = df.full_name.str.extract(f'{col}_((_?[^_]+)*)')[0]
+df.weight_decay = df.weight_decay.astype(float)
+df['reg_key'] = (
+    df.reg + 
+    '_nml_' +
+    df.normalisation + 
+    '_hs_' + 
+    df.hidden_size +
+    '_epochs_' +
+    df.nepochs +
+    '_tries_' + 
+    df.ntries +
+    '_wd_' +
+    df.weight_decay.map(lambda x: f'{x:.04f}')
+)
+df.head()
+#%%
+[col for col in df.columns if (df[col] != df[col][0]).any()]
 # %%
 # Train vs. test
 fig = px.line(
-    df, x='split', y='accuracy', color='reg', 
+    df, x='partition', y='accuracy', color='reg_key', 
     facet_col='dataset_name', facet_row='model_name'
 )
 fig.show()
