@@ -128,10 +128,7 @@ def args_to_filename(args: Union[dict, argparse.Namespace]):
 def generations_filename(args, generation_type):
     return generation_type + "__" + args_to_filename(args) + ".npy".format(generation_type)
 
-<<<<<<< HEAD:utils.py
 
-=======
->>>>>>> feature/deterministic:dlk/utils.py
 def save_generations(generation, args, generation_type):
     """
     Input: 
@@ -142,14 +139,9 @@ def save_generations(generation, args, generation_type):
     Saves the generations to an appropriate directory.
     """
     filename = generations_filename(args, generation_type)
-<<<<<<< HEAD:utils.py
-
-=======
->>>>>>> feature/deterministic:dlk/utils.py
     # create save directory if it doesn't exist
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
-
     # save
     np.save(os.path.join(args.save_dir, filename), generation)
 
@@ -547,21 +539,12 @@ class LatentKnowledgeMethod(object):
         neg_hs_train: torch.Tensor, 
         pos_hs_train: torch.Tensor, 
         y_train: torch.Tensor,
-<<<<<<< HEAD:utils.py
         neg_hs_test: torch.Tensor,
         pos_hs_test: torch.Tensor,
-=======
-        neg_hs_test: torch.Tensor, 
-        pos_hs_test: torch.Tensor, 
->>>>>>> feature/deterministic:dlk/utils.py
         y_test: torch.Tensor,
         mean_normalize: bool = True,
         var_normalize: bool = True,
         device: str = 'cuda',
-<<<<<<< HEAD:utils.py
-        **kwargs
-=======
->>>>>>> feature/deterministic:dlk/utils.py
     ) -> None:
         '''
         x0: negative hidden states, shape [num_examples, num_hidden_states]
@@ -577,10 +560,6 @@ class LatentKnowledgeMethod(object):
         self.pos_hs_test = self.normalize(pos_hs_test)
         self.y_test = y_test
         self.d = self.neg_hs_train.shape[-1]
-<<<<<<< HEAD:utils.py
-        self.best_probe = None
-=======
->>>>>>> feature/deterministic:dlk/utils.py
 
     def normalize(self, x):
         """
@@ -589,61 +568,28 @@ class LatentKnowledgeMethod(object):
         """
         if self.mean_normalize:
             x = x - x.mean(axis=0, keepdims=True)
-<<<<<<< HEAD:utils.py
-        else:
-            warnings.warn(
-                'mean_normalize set to false'
-            )
-        if self.var_normalize:
-            x /= x.std(axis=0, keepdims=True)
-        else:
-            warnings.warn(
-                'var_normalize set to false'
-            )
-=======
         if self.var_normalize:
             x /= x.std(axis=0, keepdims=True)
 
->>>>>>> feature/deterministic:dlk/utils.py
         return x
     
     def get_tensor_data(self, x0=None, x1=None):
         """
         Returns x0, x1 as appropriate tensors (rather than np arrays)
         """
-<<<<<<< HEAD:utils.py
-        x0 = torch.tensor(self.neg_hs_train, dtype=torch.float, requires_grad=False, device=self.device)
-        x1 = torch.tensor(self.pos_hs_train, dtype=torch.float, requires_grad=False, device=self.device)
-=======
         if x0 is None:
             x0 = self.neg_hs_train
         if x1 is None:
             x1 = self.pos_hs_train
         x0 = torch.tensor(x0, dtype=torch.float, requires_grad=False, device=self.device)
         x1 = torch.tensor(x1, dtype=torch.float, requires_grad=False, device=self.device)
->>>>>>> feature/deterministic:dlk/utils.py
         return x0, x1
     
     def get_acc(self, x0_val, x1_val, y_val):
         """
         Computes accuracy for the current parameters on the given test inputs
         """
-<<<<<<< HEAD:utils.py
-        x0 = torch.tensor(
-            x0_val, 
-            dtype=torch.float, 
-            requires_grad=False, 
-            device=self.device
-        )
-        x1 = torch.tensor(
-            x1_val, 
-            dtype=torch.float, 
-            requires_grad=False, 
-            device=self.device
-        )
-=======
         x0, x1 = self.get_tensor_data(x0_val, x1_val)
->>>>>>> feature/deterministic:dlk/utils.py
         with torch.no_grad():
             p0, p1 = self.best_probe(x0), self.best_probe(x1)
         avg_confidence = 0.5 * (p0 + (1 - p1))
@@ -653,16 +599,6 @@ class LatentKnowledgeMethod(object):
         return acc
     
     def get_train_acc(self):
-<<<<<<< HEAD:utils.py
-        return self.get_acc(
-            self.neg_hs_train, self.pos_hs_train, self.y_train,
-        )
-    
-    def get_test_acc(self):
-        return self.get_acc(
-            self.neg_hs_test, self.pos_hs_test, self.y_test,
-        )
-=======
         return self.get_acc(self.neg_hs_train, self.pos_hs_train, self.y_train)
     
     def get_test_acc(self):
@@ -779,4 +715,3 @@ class CCS(LatentKnowledgeMethod):
                 best_loss = loss
 
         return best_loss
->>>>>>> feature/deterministic:dlk/utils.py
