@@ -13,8 +13,14 @@ def test_generated_file(filename: str):
 
 
 class TestGenerate(ut.TestCase):
+    FILENAMES = [
+        'negative_hidden_states__model_name_deberta-l__parallelize_False__dataset_name_truthful_qa__split_test__config_name_multiple_choice__prompt_idx_0__batch_size_1__num_examples_10__seed_0__use_decoder_False__layer_-1__all_layers_False__token_idx_-1.npy', 
+        'positive_hidden_states__model_name_deberta-l__parallelize_False__dataset_name_truthful_qa__split_test__config_name_multiple_choice__prompt_idx_0__batch_size_1__num_examples_10__seed_0__use_decoder_False__layer_-1__all_layers_False__token_idx_-1.npy', 
+        'labels__model_name_deberta-l__parallelize_False__dataset_name_truthful_qa__split_test__config_name_multiple_choice__prompt_idx_0__batch_size_1__num_examples_10__seed_0__use_decoder_False__layer_-1__all_layers_False__token_idx_-1.npy'
+    ]
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         main([
             "--device",
             "cpu",
@@ -29,16 +35,15 @@ class TestGenerate(ut.TestCase):
             "--prompt_idx",
             "0",
         ])
-        self.filenames = os.listdir('reference_hidden_states')
-
-    def test_labels(self):
-        test_generated_file(self.filenames[0])
 
     def test_negatives(self):
-        test_generated_file(self.filenames[1])
+        test_generated_file(self.FILENAMES[0])
 
     def test_positives(self):
-        test_generated_file(self.filenames[2])
+        test_generated_file(self.FILENAMES[1])
+
+    def test_labels(self):
+        test_generated_file(self.FILENAMES[2])
 
 
 if __name__ == '__main__':
