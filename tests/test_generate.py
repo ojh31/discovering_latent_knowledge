@@ -7,7 +7,9 @@ from dlk.generate import main
 def test_generated_file(filename: str):
     ref = np.load(os.path.join('reference_hidden_states', filename))
     act = np.load(os.path.join('generated_hidden_states', filename))
-    np.testing.assert_allclose(ref, act)
+    np.testing.assert_allclose(
+        ref, act, atol=5e-5, rtol=1e-4,
+    )
 
 
 class TestGenerate(ut.TestCase):
@@ -15,7 +17,7 @@ class TestGenerate(ut.TestCase):
     def setUp(self):
         main([
             "--device",
-            "cuda",
+            "cpu",
             "--model_name",
             "deberta-l",
             "--dataset_name",

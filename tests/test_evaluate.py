@@ -8,7 +8,7 @@ class TestEvaluate(ut.TestCase):
     def setUp(self) -> None:
         accuracy = main([
             "--device",
-            "cuda",
+            "cpu",
             "--model_name",
             "deberta-l",
             "--dataset_name",
