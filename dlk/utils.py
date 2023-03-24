@@ -1,16 +1,13 @@
 import os
 import argparse
-import copy
 from typing import Union
 import yaml
 
 import numpy as np
-import pandas as pd
 from tqdm import tqdm
 
 import torch
 from torch.utils.data import Dataset, DataLoader
-from torchvision import datasets
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -599,115 +596,3 @@ class LatentKnowledgeMethod(object):
     
     def get_test_acc(self):
         return self.get_acc(self.neg_hs_test, self.pos_hs_test, self.y_test)
-    
-
-class CCS(LatentKnowledgeMethod):
-    def __init__(
-        self, 
-        neg_hs_train: torch.Tensor, 
-        pos_hs_train: torch.Tensor, 
-        y_train: torch.Tensor,
-        neg_hs_test: torch.Tensor, 
-        pos_hs_test: torch.Tensor, 
-        y_test: torch.Tensor,
-        nepochs: int = 1000, 
-        ntries: int = 10, 
-        seed: int = 0, 
-        lr: int = 1e-3, 
-        batch_size: int = -1, 
-        verbose: bool = False, 
-        device: str = "cuda", 
-        hidden_size: int = 0, 
-        weight_decay: float = 0.01, 
-        mean_normalize: bool = True,
-        var_normalize: bool = False,
-    ):
-        super().__init__(
-            neg_hs_train=neg_hs_train, 
-            pos_hs_train=pos_hs_train, 
-            y_train=y_train,
-            neg_hs_test=neg_hs_test, 
-            pos_hs_test=pos_hs_test, 
-            y_test=y_test,
-            mean_normalize=mean_normalize, 
-            var_normalize=var_normalize,
-            device=device,
-        )
-
-        # training
-        self.nepochs = nepochs
-        self.ntries = ntries
-        self.lr = lr
-        self.verbose = verbose
-        self.batch_size = batch_size
-        self.weight_decay = weight_decay
-        self.seed = seed
-        
-        # probe
-        self.hidden_size = hidden_size
-        self.linear = hidden_size is None or (hidden_size == 0)
-        self.probe = self.initialize_probe()
-        self.best_probe = copy.deepcopy(self.probe)
-
-        
-    def initialize_probe(self):
-        if self.linear:
-            self.probe = nn.Sequential(nn.Linear(self.d, 1), nn.Sigmoid())
-        else:
-            self.probe = MLPProbe(self.d, self.hidden_size)
-        self.probe.to(self.device)    
-    
-
-    def get_loss(self, p0, p1):
-        """
-        Returns the CCS loss for two probabilities each of shape (n,1) or (n,)
-        """
-        informative_loss = (torch.min(p0, p1)**2).mean(0)
-        consistent_loss = ((p0 - (1-p1))**2).mean(0)
-        return informative_loss + consistent_loss
-    
-        
-    def train(self):
-        """
-        Does a single training run of nepochs epochs
-        """
-        x0, x1 = self.get_tensor_data()
-        permutation = torch.randperm(len(x0))
-        x0, x1 = x0[permutation], x1[permutation]
-        
-        # set up optimizer
-        optimizer = torch.optim.AdamW(self.probe.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        
-        batch_size = len(x0) if self.batch_size == -1 else self.batch_size
-        nbatches = len(x0) // batch_size
-
-        # Start training (full batch)
-        for epoch in range(self.nepochs):
-            for j in range(nbatches):
-                x0_batch = x0[j*batch_size:(j+1)*batch_size]
-                x1_batch = x1[j*batch_size:(j+1)*batch_size]
-            
-                # probe
-                p0, p1 = self.probe(x0_batch), self.probe(x1_batch)
-
-                # get the corresponding loss
-                loss = self.get_loss(p0, p1)
-
-                # update the parameters
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-
-        return loss.detach().cpu().item()
-    
-    def repeated_train(self):
-        torch.manual_seed(self.seed)
-        best_loss = np.inf
-        for train_num in range(self.ntries):
-            self.initialize_probe()
-            loss = self.train()
-            if loss < best_loss:
-                self.best_probe = copy.deepcopy(self.probe)
-                best_loss = loss
-
-        return best_loss

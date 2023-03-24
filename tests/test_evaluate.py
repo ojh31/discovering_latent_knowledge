@@ -24,7 +24,7 @@ class TestEvaluate(ut.TestCase):
             "-1",
             "--ccs_device",
             "cpu",
-            "--hidden-size",
+            "--hidden_size",
             "0",
             "--weight_decay",
             "0.01",
@@ -34,7 +34,7 @@ class TestEvaluate(ut.TestCase):
             "1",
             "--mean_normalize",
             "--var_normalize",
-            "--verbose-eval",
+            "--verbose_eval",
         ])
         (
             self.lr_train_acc, self.lr_test_acc,
