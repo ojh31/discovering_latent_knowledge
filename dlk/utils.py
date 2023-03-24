@@ -116,10 +116,11 @@ def args_to_filename(args: Union[dict, argparse.Namespace]):
     if isinstance(args, argparse.Namespace):
         args = vars(args)
     exclude_keys = [
-        "save_dir", "cache_dir", "device", "verbose_eval", "eval_path",
+        "save_dir", "cache_dir", "device", "verbose", "eval_path",
     ]
+    sorted_keys = sorted([k for k in args.keys() if k not in exclude_keys])
     return "__".join([
-        '{}_{}'.format(k, v) for k, v in args.items() if k not in exclude_keys
+        '{}_{}'.format(k, args[k]) for k in sorted_keys
     ])
 
 

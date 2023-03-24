@@ -22,6 +22,8 @@ def clean_name(s: str):
 def plot_feature_importance(
     vec: Union[np.ndarray, torch.Tensor], label: str, a: argparse.Namespace,
 ):
+    if a.plot_dir is None:
+        return
     model_name = clean_name(a.model_name)
     data_name = clean_name(a.dataset_name)
     label_clean = clean_name(label)
@@ -55,8 +57,10 @@ def save_eval(key, val, args):
 
     Saves the evaluations to the eval file.
     """
-    if args.verbose_eval:
-        print(f'Setting {key}={val} for model={args.model_name}')
+    if args.verbose:
+        print(f'Evaluated {key}={val} for model={args.model_name}')
+    if args.eval_path is None:
+        return
     key = args.model_name + '__' + args.dataset_name + '__' + key
     if os.path.isfile(args.eval_path):
         with open(args.eval_path, 'r') as f:
@@ -66,28 +70,6 @@ def save_eval(key, val, args):
     eval_d[key] = val
     with open(args.eval_path, 'w') as f:
         f.write(json.dumps(eval_d))
-
-
-def parse_args(argv: List[str]):
-    parser = get_parser()
-    generation_args, _ = parser.parse_known_args(argv) # we'll use this to load the correct hidden states + labels
-    # We'll also add some additional args for evaluation
-    parser.add_argument("--nepochs", type=int, default=1000)
-    parser.add_argument("--ntries", type=int, default=10)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--ccs_batch_size", type=int, default=-1)
-    parser.add_argument("--verbose", action="store_true")
-    parser.add_argument("--ccs_device", type=str, default="cuda")
-    parser.add_argument('--hidden_size', type=int, default=None)
-    parser.add_argument("--weight_decay", type=float, default=0.01)
-    parser.add_argument("--mean_normalize", action=argparse.BooleanOptionalAction)
-    parser.add_argument("--var_normalize", action=argparse.BooleanOptionalAction)
-    parser.add_argument('--eval_path', type=str, default='eval.json')
-    parser.add_argument('--verbose_eval', action='store_true')
-    parser.add_argument('--plot-dir', type=str, default='plots')
-    parser.add_argument('--wandb_enabled', action='store_true')
-    args = parser.parse_args(argv)
-    return generation_args, args
 
 
 def split_train_test(neg_hs, pos_hs, y):
@@ -282,8 +264,7 @@ def fit_ccs(
     return ccs_train_acc, ccs_test_acc
 
 
-def main(argv: List[str]):
-    generation_args, args = parse_args(argv)
+def run_eval(generation_args: argparse.Namespace, args: argparse.Namespace):
     if args.wandb_enabled:
         wandb.init(config=args)
     # load hidden states and labels
@@ -317,7 +298,3 @@ def main(argv: List[str]):
         lr_train_acc, lr_test_acc,
         ccs_train_acc, ccs_test_acc,
     )
-
-
-if __name__ == '__main__':
-    main(sys.argv[1:])

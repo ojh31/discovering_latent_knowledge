@@ -9,4 +9,4 @@ eval.json
 plots
 *backup*
 wandb
-sweep.yaml
+*sweep.yaml
