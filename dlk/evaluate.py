@@ -17,7 +17,9 @@ def clean_name(s: str):
 
 
 def plot_feature_importance(
-    vec: Union[np.ndarray, torch.Tensor], label: str, a: argparse.Namespace,
+    vec: Union[np.ndarray, torch.Tensor], 
+    label: str, 
+    a: argparse.Namespace,
 ):
     model_name = clean_name(a.model_name)
     data_name = clean_name(a.dataset_name)
@@ -77,7 +79,8 @@ def parse_args(argv: List[str]):
     parser.add_argument("--ccs_device", type=str, default="cuda")
     parser.add_argument('--hidden-size', type=int, default=None)
     parser.add_argument("--weight_decay", type=float, default=0.01)
-    parser.add_argument("--var_normalize", action="store_true")
+    parser.add_argument("--mean_normalize", action=argparse.BooleanOptionalAction)
+    parser.add_argument("--var_normalize", action=argparse.BooleanOptionalAction)
     parser.add_argument('--eval_path', type=str, default='eval.json')
     parser.add_argument('--verbose-eval', action='store_true')
     parser.add_argument('--plot-dir', type=str, default='plots')
@@ -137,6 +140,7 @@ def fit_ccs(
         verbose=args.verbose, device=args.ccs_device, 
         hidden_size=args.hidden_size,
         weight_decay=args.weight_decay, 
+
         var_normalize=args.var_normalize
     )
     # train
