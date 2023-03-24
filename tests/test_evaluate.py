@@ -32,6 +32,7 @@ class TestEvaluate(ut.TestCase):
             "1000",
             "--ntries",
             "1",
+            "--mean_normalize",
             "--var_normalize",
             "--verbose-eval",
         ])
