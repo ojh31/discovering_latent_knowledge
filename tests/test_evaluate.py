@@ -8,7 +8,7 @@ class TestEvaluate(ut.TestCase):
     def setUp(self) -> None:
         accuracy = main([
             "--device",
-            "cuda",
+            "cpu",
             "--model_name",
             "deberta-l",
             "--dataset_name",
@@ -23,7 +23,7 @@ class TestEvaluate(ut.TestCase):
             "--ccs_batch_size",
             "-1",
             "--ccs_device",
-            "cuda",
+            "cpu",
             "--hidden-size",
             "0",
             "--weight_decay",

@@ -1,11 +1,12 @@
 .vscode
 __pycache__
 generated_hidden_states
-reference_hidden_states
+*-pip*
+*-env*
 *.ipynb
 submit code
 eval.json
 plots
 *backup*
 wandb
-*.yaml
+sweep.yaml
