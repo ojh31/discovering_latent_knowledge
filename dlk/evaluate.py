@@ -100,7 +100,13 @@ def fit_lr(
     # you can also concatenate, but this works fine and is more comparable to CCS inputs
     x_train = neg_hs_train - pos_hs_train  
     x_test = neg_hs_test - pos_hs_test
-    lr = LogisticRegression(class_weight="balanced")
+    lr = LogisticRegression(
+        class_weight="balanced",
+        random_state=args.seed,
+    )
+    if args.verbose:
+        n, p = x_train.shape
+        print(f'Fitting LR with n={n}, p={p}')
     lr.fit(x_train, y_train)
     lr_train_acc = lr.score(x_train, y_train)
     lr_test_acc = lr.score(x_test, y_test)
@@ -254,9 +260,13 @@ def fit_ccs(
         wandb_enabled=args.wandb_enabled,
     )
     # train
+    if args.verbose:
+        n, p = neg_hs_train.shape
+        print(f'Training CCS with n={n}, p={p}')
     t0_train = time.time()
     ccs.repeated_train()
-    print(f'Training completed in {time.time() - t0_train:.1f}s')
+    if args.verbose:
+        print(f'Training CCS completed in {time.time() - t0_train:.1f}s')
     ccs_train_acc = ccs.get_train_acc()
     save_eval(ccs_train_acc, reg='ccs', partition='train', args=args)
     ccs_test_acc = ccs.get_test_acc()

@@ -250,7 +250,6 @@ class ContrastDataset(Dataset):
         """
         combined_input = question + " " + answer + self.tokenizer.eos_token
         input_ids = self.tokenizer(combined_input, truncation=True, padding="max_length", return_tensors="pt")
-
         return input_ids
 
 
@@ -317,20 +316,15 @@ class ContrastDataset(Dataset):
 
         # verify these are different (e.g. tokenization didn't cut off the difference between them)
         if self.use_decoder and self.model_type == "encoder_decoder":
-            assert (neg_ids["decoder_input_ids"] - pos_ids["decoder_input_ids"]).sum() != 0, print(
-                "The decoder_input_ids for the contrast pairs are the same!", 
-                neg_ids, 
-                pos_ids
-            )
+            truncated = (
+                neg_ids["decoder_input_ids"] == 
+                pos_ids["decoder_input_ids"]
+            ).all()
         else:
-            assert (neg_ids["input_ids"] - pos_ids["input_ids"]).sum() != 0, print(
-                "The input_ids for the contrast pairs are the same!", 
-                neg_ids, 
-                pos_ids
-            )
+            truncated = (neg_ids["input_ids"] == pos_ids["input_ids"]).all()
 
         # return the tokenized inputs, the text prompts, and the true label
-        return neg_ids, pos_ids, neg_prompt, pos_prompt, true_answer
+        return neg_ids, pos_ids, neg_prompt, pos_prompt, true_answer, truncated
     
 
 def get_templates(dataset_name: str) -> DatasetTemplates:
@@ -378,9 +372,8 @@ def get_dataloader(
     prompt = all_prompts[prompt_name_list[prompt_idx]]
     keep_idxs = []
     for idx in random_idxs:
-        question, answer = contrast_dataset[int(idx)][-2]
-        input_text = question + " " + answer
-        if len(tokenizer.encode(input_text, truncation=False)) < tokenizer.model_max_length - 2:  # include small margin to be conservative
+        truncated = contrast_dataset[int(idx)][-1]
+        if not truncated:
             keep_idxs.append(idx)
             if len(keep_idxs) >= num_examples:
                 break
@@ -489,7 +482,9 @@ def get_all_hidden_states(
 
     model.eval()
     for batch in tqdm(dataloader):
-        neg_ids, pos_ids, _, _, gt_label = batch
+        neg_ids, pos_ids, _, _, gt_label, truncated = batch
+
+        assert not truncated
 
         neg_hs = get_individual_hidden_states(
             model, neg_ids, layer=layer, all_layers=all_layers, token_idx=token_idx, 
