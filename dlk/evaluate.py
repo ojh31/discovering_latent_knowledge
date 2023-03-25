@@ -18,7 +18,7 @@ from dlk.utils import (
 
 
 def clean_name(s: str):
-    return s.lower().replace('-', '_')
+    return s.lower().replace('-', '_').replace('/', '_')
 
 
 def plot_feature_importance(

@@ -30,6 +30,7 @@ for col in cols_to_extract:
     if col in bool_cols:
         df[col] = df[col].map({'True': True, 'False': False})
 df = df.astype({col: float for col in float_cols})
+df.dataset_name = df.dataset_name.str.replace('_multiple_choice', '')
 df['reg_key'] = (
     df.reg +
     '_layers_' +
