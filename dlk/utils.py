@@ -24,15 +24,15 @@ from datasets import load_dataset
 # You can run whatever model you'd like.
 model_mapping = {
     # smaller models
-    "gpt2-s": "gpt2-small",
+    "gpt2-s": "gpt2",
     "gpt2-m": "gpt2-medium",
-    "gpt-neo": "gpt-neo-125M",
+    "gpt-neo": "EleutherAI/gpt-neo-125M",
     "opt": "opt-125m",
     "deberta-l": "microsoft/deberta-large-mnli",
     "roberta-mnli": "roberta-large-mnli",
     "unifiedqa-l": "allenai/unifiedqa-t5-large",
-    "stanford-a": "stanford-gpt2-small-a",
-    "stanford-b": "stanford-gpt2-small-b",
+    "stanford-a": "stanford-crfm/alias-gpt2-small-x21",
+    "stanford-b": "stanford-crfm/battlestar-gpt2-small-x49",
     "pythia": "pythia-160m",
 
     # XL models
@@ -58,7 +58,6 @@ def get_parser():
     # setting up data
     parser.add_argument("--dataset_name", type=str, default="imdb", help="Name of the dataset to use")
     parser.add_argument("--split", type=str, default="test", help="Which split of the dataset to use")
-    parser.add_argument("--config_name", type=str, default=None, help="Name argument to pass to load_dataset")
     parser.add_argument("--prompt_idx", type=int, default=0, help="Which prompt to use")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size to use")
     parser.add_argument("--num_examples", type=int, default=1000, help="Number of examples to generate")
@@ -116,10 +115,18 @@ def args_to_filename(args: Union[dict, argparse.Namespace]):
     if isinstance(args, argparse.Namespace):
         args = vars(args)
     exclude_keys = [
-        "save_dir", "cache_dir", "device", "verbose_eval", "eval_path",
+        "save_dir", "cache_dir", "device", "verbose", "eval_path",
+    ]
+    sorted_keys = sorted([k for k in args.keys() if k not in exclude_keys])
+    sorted_values = [
+        args[k].replace('/', '_') 
+        if isinstance(args[k], str) 
+        else args[k]
+        for k in sorted_keys
     ]
     return "__".join([
-        '{}_{}'.format(k, v) for k, v in args.items() if k not in exclude_keys
+        '{}_{}'.format(k, v) 
+        for k, v in zip(sorted_keys, sorted_values)
     ])
 
 
@@ -249,7 +256,6 @@ class ContrastDataset(Dataset):
         """
         combined_input = question + " " + answer + self.tokenizer.eos_token
         input_ids = self.tokenizer(combined_input, truncation=True, padding="max_length", return_tensors="pt")
-
         return input_ids
 
 
@@ -316,20 +322,15 @@ class ContrastDataset(Dataset):
 
         # verify these are different (e.g. tokenization didn't cut off the difference between them)
         if self.use_decoder and self.model_type == "encoder_decoder":
-            assert (neg_ids["decoder_input_ids"] - pos_ids["decoder_input_ids"]).sum() != 0, print(
-                "The decoder_input_ids for the contrast pairs are the same!", 
-                neg_ids, 
-                pos_ids
-            )
+            truncated = (
+                neg_ids["decoder_input_ids"] == 
+                pos_ids["decoder_input_ids"]
+            ).all()
         else:
-            assert (neg_ids["input_ids"] - pos_ids["input_ids"]).sum() != 0, print(
-                "The input_ids for the contrast pairs are the same!", 
-                neg_ids, 
-                pos_ids
-            )
+            truncated = (neg_ids["input_ids"] == pos_ids["input_ids"]).all()
 
         # return the tokenized inputs, the text prompts, and the true label
-        return neg_ids, pos_ids, neg_prompt, pos_prompt, true_answer
+        return neg_ids, pos_ids, neg_prompt, pos_prompt, true_answer, truncated
     
 
 def get_templates(dataset_name: str) -> DatasetTemplates:
@@ -345,7 +346,7 @@ def get_dataloader(
     dataset_name, split, tokenizer, prompt_idx, batch_size=16, num_examples=1000,
     seed=0,
     model_type="encoder_decoder", use_decoder=False, device="cuda", pin_memory=True, 
-    num_workers=1, config_name=None,
+    num_workers=1,
 ):
     """
     Creates a dataloader for a given dataset (and its split), tokenizer, and 
@@ -355,6 +356,10 @@ def get_dataloader(
     the dataset that are not truncated by the tokenizer.
     """
     # load the raw dataset
+    if '/' in dataset_name:
+        dataset_name, config_name = dataset_name.split('/')
+    else:
+        config_name = None
     ds = load_dataset(dataset_name, name=config_name)
     if split == 'test' and split not in ds:
         split = 'validation'
@@ -377,9 +382,8 @@ def get_dataloader(
     prompt = all_prompts[prompt_name_list[prompt_idx]]
     keep_idxs = []
     for idx in random_idxs:
-        question, answer = contrast_dataset[int(idx)][-2]
-        input_text = question + " " + answer
-        if len(tokenizer.encode(input_text, truncation=False)) < tokenizer.model_max_length - 2:  # include small margin to be conservative
+        truncated = contrast_dataset[int(idx)][-1]
+        if not truncated:
             keep_idxs.append(idx)
             if len(keep_idxs) >= num_examples:
                 break
@@ -488,7 +492,9 @@ def get_all_hidden_states(
 
     model.eval()
     for batch in tqdm(dataloader):
-        neg_ids, pos_ids, _, _, gt_label = batch
+        neg_ids, pos_ids, _, _, gt_label, truncated = batch
+
+        assert not truncated
 
         neg_hs = get_individual_hidden_states(
             model, neg_ids, layer=layer, all_layers=all_layers, token_idx=token_idx, 

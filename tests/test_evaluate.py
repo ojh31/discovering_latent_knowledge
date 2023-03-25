@@ -1,45 +1,64 @@
+import argparse
 import numpy as np
 import unittest as ut
-from dlk.evaluate import main
+from dlk.evaluate import run_eval
+
+GEN_ARGS = argparse.Namespace(
+    device='cpu',
+    model_name='deberta-l',
+    dataset_name='truthful_qa/multiple_choice',
+    split='test',
+    num_examples=10,
+    prompt_idx=0,
+    parallelize=False,
+    batch_size=1,
+    seed=0,
+    use_decoder=False,
+    layer=-1,
+    all_layers=False,
+    token_idx=-1,
+    save_dir='reference_hidden_states',
+)
+ARGS = argparse.Namespace(
+    device='cpu',
+    model_name='deberta-l',
+    dataset_name='truthful_qa/multiple_choice',
+    split='test',
+    num_examples=10,
+    prompt_idx=0,
+    parallelize=False,
+    batch_size=1,
+    seed=0,
+    use_decoder=False,
+    layer=-1,
+    all_layers=False,
+    token_idx=-1,
+    save_dir='reference_hidden_states',
+    cache_dir=None,
+
+    ccs_batch_size=-1,
+    ccs_device='cpu',
+    hidden_size=0,
+    lr=1e-3,
+    weight_decay=.01,
+    nepochs=1000,
+    ntries=1,
+    mean_normalize=True,
+    var_normalize=True,
+    wandb_enabled=False,
+    eval_path=None,
+    plot_dir=None,
+    verbose=True,
+)
 
 
 class TestEvaluate(ut.TestCase):
 
     def setUp(self) -> None:
-        accuracy = main([
-            "--device",
-            "cpu",
-            "--model_name",
-            "deberta-l",
-            "--dataset_name",
-            "truthful_qa",
-            "--config_name",
-            "multiple_choice",
-            "--num_examples",
-            "10",
-            "--save_dir",
-            "reference_hidden_states",
-
-            "--ccs_batch_size",
-            "-1",
-            "--ccs_device",
-            "cpu",
-            "--hidden_size",
-            "0",
-            "--weight_decay",
-            "0.01",
-            "--nepochs",
-            "1000",
-            "--ntries",
-            "1",
-            "--mean_normalize",
-            "--var_normalize",
-            "--verbose_eval",
-        ])
         (
             self.lr_train_acc, self.lr_test_acc,
             self.ccs_train_acc, self.ccs_test_acc,
-        ) = accuracy
+        ) = run_eval(GEN_ARGS, ARGS)
 
     def testLRTrainAcc(self):
         np.testing.assert_allclose(

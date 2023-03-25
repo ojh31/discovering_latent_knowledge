@@ -10,18 +10,22 @@ import plotly.express as px
 from sklearn.linear_model import LogisticRegression
 import torch
 import torch.nn as nn
-from typing import Union, List
+from typing import Union
 import wandb
-from dlk.utils import get_parser, load_all_generations, MLPProbe, LatentKnowledgeMethod
+from dlk.utils import (
+    load_all_generations, MLPProbe, LatentKnowledgeMethod, args_to_filename
+)
 
 
 def clean_name(s: str):
-    return s.lower().replace('-', '_')
+    return s.lower().replace('-', '_').replace('/', '_')
 
 
 def plot_feature_importance(
     vec: Union[np.ndarray, torch.Tensor], label: str, a: argparse.Namespace,
 ):
+    if a.plot_dir is None:
+        return
     model_name = clean_name(a.model_name)
     data_name = clean_name(a.dataset_name)
     label_clean = clean_name(label)
@@ -46,18 +50,22 @@ def plot_feature_importance(
     )
     
 
-def save_eval(key, val, args):
+def save_eval(val, reg, partition, args):
     """
-    Input: 
-        key: name of field to write
-        val: value corresponding to key
-        args: cmd arguments used to generate
-
     Saves the evaluations to the eval file.
     """
-    if args.verbose_eval:
-        print(f'Setting {key}={val} for model={args.model_name}')
-    key = args.model_name + '__' + args.dataset_name + '__' + key
+    if args.verbose:
+        print(
+            f'Evaluated {val} for model={args.model_name}, '
+            f'reg={reg}, partition={partition}'
+        )
+    if args.eval_path is None:
+        return
+    key = (
+        args_to_filename(args) + 
+        '__reg_' +  reg + 
+        '__partition_' + partition
+    )
     if os.path.isfile(args.eval_path):
         with open(args.eval_path, 'r') as f:
             eval_d = json.load(f)
@@ -66,28 +74,6 @@ def save_eval(key, val, args):
     eval_d[key] = val
     with open(args.eval_path, 'w') as f:
         f.write(json.dumps(eval_d))
-
-
-def parse_args(argv: List[str]):
-    parser = get_parser()
-    generation_args, _ = parser.parse_known_args(argv) # we'll use this to load the correct hidden states + labels
-    # We'll also add some additional args for evaluation
-    parser.add_argument("--nepochs", type=int, default=1000)
-    parser.add_argument("--ntries", type=int, default=10)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--ccs_batch_size", type=int, default=-1)
-    parser.add_argument("--verbose", action="store_true")
-    parser.add_argument("--ccs_device", type=str, default="cuda")
-    parser.add_argument('--hidden_size', type=int, default=None)
-    parser.add_argument("--weight_decay", type=float, default=0.01)
-    parser.add_argument("--mean_normalize", action=argparse.BooleanOptionalAction)
-    parser.add_argument("--var_normalize", action=argparse.BooleanOptionalAction)
-    parser.add_argument('--eval_path', type=str, default='eval.json')
-    parser.add_argument('--verbose_eval', action='store_true')
-    parser.add_argument('--plot-dir', type=str, default='plots')
-    parser.add_argument('--wandb_enabled', action='store_true')
-    args = parser.parse_args(argv)
-    return generation_args, args
 
 
 def split_train_test(neg_hs, pos_hs, y):
@@ -114,12 +100,18 @@ def fit_lr(
     # you can also concatenate, but this works fine and is more comparable to CCS inputs
     x_train = neg_hs_train - pos_hs_train  
     x_test = neg_hs_test - pos_hs_test
-    lr = LogisticRegression(class_weight="balanced")
+    lr = LogisticRegression(
+        class_weight="balanced",
+        random_state=args.seed,
+    )
+    if args.verbose:
+        n, p = x_train.shape
+        print(f'Fitting LR with n={n}, p={p}')
     lr.fit(x_train, y_train)
     lr_train_acc = lr.score(x_train, y_train)
     lr_test_acc = lr.score(x_test, y_test)
-    save_eval('lr_train_acc', lr_train_acc, args)
-    save_eval('lr_test_acc', lr_test_acc, args)
+    save_eval(lr_train_acc, reg='lr', partition='train', args=args)
+    save_eval(lr_test_acc, reg='lr', partition='test', args=args)
     lr_fi = (x_train.std(0) * lr.coef_).squeeze()
     plot_feature_importance(lr_fi, 'LR', args)
     return lr_train_acc, lr_test_acc
@@ -268,13 +260,17 @@ def fit_ccs(
         wandb_enabled=args.wandb_enabled,
     )
     # train
+    if args.verbose:
+        n, p = neg_hs_train.shape
+        print(f'Training CCS with n={n}, p={p}')
     t0_train = time.time()
     ccs.repeated_train()
-    print(f'Training completed in {time.time() - t0_train:.1f}s')
+    if args.verbose:
+        print(f'Training CCS completed in {time.time() - t0_train:.1f}s')
     ccs_train_acc = ccs.get_train_acc()
-    save_eval('ccs_train_acc', ccs_train_acc, args)
+    save_eval(ccs_train_acc, reg='ccs', partition='train', args=args)
     ccs_test_acc = ccs.get_test_acc()
-    save_eval('ccs_test_acc', ccs_test_acc, args)
+    save_eval(ccs_test_acc, reg='ccs', partition='test', args=args)
 
     if ccs.linear:
         ccs_fi = (ccs.best_probe[0].weight * ccs.pos_hs_train.std()).squeeze()
@@ -282,8 +278,7 @@ def fit_ccs(
     return ccs_train_acc, ccs_test_acc
 
 
-def main(argv: List[str]):
-    generation_args, args = parse_args(argv)
+def run_eval(generation_args: argparse.Namespace, args: argparse.Namespace):
     if args.wandb_enabled:
         wandb.init(config=args)
     # load hidden states and labels
@@ -317,7 +312,3 @@ def main(argv: List[str]):
         lr_train_acc, lr_test_acc,
         ccs_train_acc, ccs_test_acc,
     )
-
-
-if __name__ == '__main__':
-    main(sys.argv[1:])

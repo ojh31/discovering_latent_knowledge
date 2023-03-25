@@ -1,10 +1,8 @@
-import sys
+import argparse
 from typing import List
 from dlk.utils import get_parser, load_model, get_dataloader, get_all_hidden_states, save_generations
 
-def main(args: List[str]):
-    parser = get_parser()
-    args = parser.parse_args(args)
+def run_gen(args: argparse.Namespace):
 
     # Set up the model and data
     print("Loading model")
@@ -19,7 +17,6 @@ def main(args: List[str]):
         num_examples=args.num_examples, seed=args.seed,
         model_type=model_type, 
         use_decoder=args.use_decoder, device=args.device, 
-        config_name=args.config_name,
     )
 
     # Get the hidden states and labels
@@ -34,7 +31,3 @@ def main(args: List[str]):
     save_generations(neg_hs, args, generation_type="negative_hidden_states")
     save_generations(pos_hs, args, generation_type="positive_hidden_states")
     save_generations(y, args, generation_type="labels")
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

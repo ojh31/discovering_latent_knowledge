@@ -6,7 +6,8 @@ generated_hidden_states
 *.ipynb
 submit code
 eval.json
+results.json
 plots
 *backup*
 wandb
-sweep.yaml
+*sweep.yaml
