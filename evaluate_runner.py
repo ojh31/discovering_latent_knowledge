@@ -21,6 +21,9 @@ def parse_args(argv: List[str]):
     parser.add_argument('--eval_path', type=str, default='results.json')
     parser.add_argument('--plot_dir', type=str, default='plots')
     parser.add_argument('--wandb_enabled', action='store_true')
+    parser.add_argument("--lr_max_iter", type=int, default=100)
+    parser.add_argument("--lr_solver", type=str, default="lbfgs")
+    parser.add_argument("--lr_inv_reg", type=float, default=1.0)
     args = parser.parse_args(argv)
     return generation_args, args
 

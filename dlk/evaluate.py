@@ -103,10 +103,16 @@ def fit_lr(
     lr = LogisticRegression(
         class_weight="balanced",
         random_state=args.seed,
+        max_iter=args.lr_max_iter,
+        solver=args.lr_solver,
+        C=args.lr_inv_reg,
     )
     if args.verbose:
         n, p = x_train.shape
-        print(f'Fitting LR with n={n}, p={p}')
+        print(
+            f'Fitting LR with n={n}, p={p}, C={lr.C}, '
+            f'max_iter={lr.max_iter}, random_state={lr.random_state}'
+        )
     lr.fit(x_train, y_train)
     lr_train_acc = lr.score(x_train, y_train)
     lr_test_acc = lr.score(x_test, y_test)
