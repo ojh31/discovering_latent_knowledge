@@ -49,6 +49,9 @@ ARGS = argparse.Namespace(
     eval_path=None,
     plot_dir=None,
     verbose=True,
+    lr_max_iter=100,
+    lr_solver='lbfgs',
+    lr_inv_reg=1.0,
 )
 
 
