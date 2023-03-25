@@ -58,7 +58,6 @@ def get_parser():
     # setting up data
     parser.add_argument("--dataset_name", type=str, default="imdb", help="Name of the dataset to use")
     parser.add_argument("--split", type=str, default="test", help="Which split of the dataset to use")
-    parser.add_argument("--config_name", type=str, default=None, help="Name argument to pass to load_dataset")
     parser.add_argument("--prompt_idx", type=int, default=0, help="Which prompt to use")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size to use")
     parser.add_argument("--num_examples", type=int, default=1000, help="Number of examples to generate")
@@ -119,8 +118,15 @@ def args_to_filename(args: Union[dict, argparse.Namespace]):
         "save_dir", "cache_dir", "device", "verbose", "eval_path",
     ]
     sorted_keys = sorted([k for k in args.keys() if k not in exclude_keys])
+    sorted_values = [
+        args[k].replace('/', '_') 
+        if isinstance(args[k], str) 
+        else args[k]
+        for k in sorted_keys
+    ]
     return "__".join([
-        '{}_{}'.format(k, args[k]) for k in sorted_keys
+        '{}_{}'.format(k, v) 
+        for k, v in zip(sorted_keys, sorted_values)
     ])
 
 
@@ -340,7 +346,7 @@ def get_dataloader(
     dataset_name, split, tokenizer, prompt_idx, batch_size=16, num_examples=1000,
     seed=0,
     model_type="encoder_decoder", use_decoder=False, device="cuda", pin_memory=True, 
-    num_workers=1, config_name=None,
+    num_workers=1,
 ):
     """
     Creates a dataloader for a given dataset (and its split), tokenizer, and 
@@ -350,6 +356,10 @@ def get_dataloader(
     the dataset that are not truncated by the tokenizer.
     """
     # load the raw dataset
+    if '/' in dataset_name:
+        dataset_name, config_name = dataset_name.split('/')
+    else:
+        config_name = None
     ds = load_dataset(dataset_name, name=config_name)
     if split == 'test' and split not in ds:
         split = 'validation'

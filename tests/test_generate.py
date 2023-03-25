@@ -7,9 +7,8 @@ from dlk.generate import run_gen
 ARGS = argparse.Namespace(
     device='cpu',
     model_name='deberta-l',
-    dataset_name='truthful_qa',
+    dataset_name='truthful_qa/multiple_choice',
     split='test',
-    config_name='multiple_choice',
     num_examples=10,
     prompt_idx=0,
     parallelize=False,
@@ -23,9 +22,9 @@ ARGS = argparse.Namespace(
     cache_dir=None,
 )
 FILENAMES = [
-    'negative_hidden_states__all_layers_False__batch_size_1__config_name_multiple_choice__dataset_name_truthful_qa__layer_-1__model_name_deberta-l__num_examples_10__parallelize_False__prompt_idx_0__seed_0__split_test__token_idx_-1__use_decoder_False.npy',
-    'positive_hidden_states__all_layers_False__batch_size_1__config_name_multiple_choice__dataset_name_truthful_qa__layer_-1__model_name_deberta-l__num_examples_10__parallelize_False__prompt_idx_0__seed_0__split_test__token_idx_-1__use_decoder_False.npy', 
-    'labels__all_layers_False__batch_size_1__config_name_multiple_choice__dataset_name_truthful_qa__layer_-1__model_name_deberta-l__num_examples_10__parallelize_False__prompt_idx_0__seed_0__split_test__token_idx_-1__use_decoder_False.npy', 
+    'negative_hidden_states__all_layers_False__batch_size_1__dataset_name_truthful_qa_multiple_choice__layer_-1__model_name_deberta-l__num_examples_10__parallelize_False__prompt_idx_0__seed_0__split_test__token_idx_-1__use_decoder_False.npy',
+    'positive_hidden_states__all_layers_False__batch_size_1__dataset_name_truthful_qa_multiple_choice__layer_-1__model_name_deberta-l__num_examples_10__parallelize_False__prompt_idx_0__seed_0__split_test__token_idx_-1__use_decoder_False.npy', 
+    'labels__all_layers_False__batch_size_1__dataset_name_truthful_qa_multiple_choice__layer_-1__model_name_deberta-l__num_examples_10__parallelize_False__prompt_idx_0__seed_0__split_test__token_idx_-1__use_decoder_False.npy', 
 ]
 REF_ROOT = 'reference_hidden_states'
 GEN_ROOT = 'generated_hidden_states'
