@@ -10,9 +10,11 @@ import plotly.express as px
 from sklearn.linear_model import LogisticRegression
 import torch
 import torch.nn as nn
-from typing import Union, List
+from typing import Union
 import wandb
-from dlk.utils import get_parser, load_all_generations, MLPProbe, LatentKnowledgeMethod
+from dlk.utils import (
+    load_all_generations, MLPProbe, LatentKnowledgeMethod, args_to_filename
+)
 
 
 def clean_name(s: str):
@@ -48,20 +50,22 @@ def plot_feature_importance(
     )
     
 
-def save_eval(key, val, args):
+def save_eval(val, reg, partition, args):
     """
-    Input: 
-        key: name of field to write
-        val: value corresponding to key
-        args: cmd arguments used to generate
-
     Saves the evaluations to the eval file.
     """
     if args.verbose:
-        print(f'Evaluated {key}={val} for model={args.model_name}')
+        print(
+            f'Evaluated {val} for model={args.model_name}, '
+            f'reg={reg}, partition={partition}'
+        )
     if args.eval_path is None:
         return
-    key = args.model_name + '__' + args.dataset_name + '__' + key
+    key = (
+        args_to_filename(args) + 
+        '__reg_' +  reg + 
+        '__partition_' + partition
+    )
     if os.path.isfile(args.eval_path):
         with open(args.eval_path, 'r') as f:
             eval_d = json.load(f)
@@ -100,8 +104,8 @@ def fit_lr(
     lr.fit(x_train, y_train)
     lr_train_acc = lr.score(x_train, y_train)
     lr_test_acc = lr.score(x_test, y_test)
-    save_eval('lr_train_acc', lr_train_acc, args)
-    save_eval('lr_test_acc', lr_test_acc, args)
+    save_eval(lr_train_acc, reg='lr', partition='train', args=args)
+    save_eval(lr_test_acc, reg='lr', partition='test', args=args)
     lr_fi = (x_train.std(0) * lr.coef_).squeeze()
     plot_feature_importance(lr_fi, 'LR', args)
     return lr_train_acc, lr_test_acc
@@ -254,9 +258,9 @@ def fit_ccs(
     ccs.repeated_train()
     print(f'Training completed in {time.time() - t0_train:.1f}s')
     ccs_train_acc = ccs.get_train_acc()
-    save_eval('ccs_train_acc', ccs_train_acc, args)
+    save_eval(ccs_train_acc, reg='ccs', partition='train', args=args)
     ccs_test_acc = ccs.get_test_acc()
-    save_eval('ccs_test_acc', ccs_test_acc, args)
+    save_eval(ccs_test_acc, reg='ccs', partition='test', args=args)
 
     if ccs.linear:
         ccs_fi = (ccs.best_probe[0].weight * ccs.pos_hs_train.std()).squeeze()

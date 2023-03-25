@@ -24,15 +24,15 @@ from datasets import load_dataset
 # You can run whatever model you'd like.
 model_mapping = {
     # smaller models
-    "gpt2-s": "gpt2-small",
+    "gpt2-s": "gpt2",
     "gpt2-m": "gpt2-medium",
-    "gpt-neo": "gpt-neo-125M",
+    "gpt-neo": "EleutherAI/gpt-neo-125M",
     "opt": "opt-125m",
     "deberta-l": "microsoft/deberta-large-mnli",
     "roberta-mnli": "roberta-large-mnli",
     "unifiedqa-l": "allenai/unifiedqa-t5-large",
-    "stanford-a": "stanford-gpt2-small-a",
-    "stanford-b": "stanford-gpt2-small-b",
+    "stanford-a": "stanford-crfm/alias-gpt2-small-x21",
+    "stanford-b": "stanford-crfm/battlestar-gpt2-small-x49",
     "pythia": "pythia-160m",
 
     # XL models

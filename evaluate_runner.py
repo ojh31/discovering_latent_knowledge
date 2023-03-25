@@ -18,7 +18,7 @@ def parse_args(argv: List[str]):
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--mean_normalize", action=argparse.BooleanOptionalAction)
     parser.add_argument("--var_normalize", action=argparse.BooleanOptionalAction)
-    parser.add_argument('--eval_path', type=str, default='eval.json')
+    parser.add_argument('--eval_path', type=str, default='results.json')
     parser.add_argument('--plot_dir', type=str, default='plots')
     parser.add_argument('--wandb_enabled', action='store_true')
     args = parser.parse_args(argv)
