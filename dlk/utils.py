@@ -26,14 +26,18 @@ model_mapping = {
     # smaller models
     "gpt2-s": "gpt2",
     "gpt2-m": "gpt2-medium",
-    "gpt-neo": "EleutherAI/gpt-neo-125M",
+    "gpt-neo-s": "EleutherAI/gpt-neo-125M",
     "opt": "opt-125m",
-    "deberta-l": "microsoft/deberta-large-mnli",
-    "roberta-mnli": "roberta-large-mnli",
-    "unifiedqa-l": "allenai/unifiedqa-t5-large",
     "stanford-a": "stanford-crfm/alias-gpt2-small-x21",
     "stanford-b": "stanford-crfm/battlestar-gpt2-small-x49",
     "pythia": "pythia-160m",
+
+    # large models
+    "opt-l": "opt-1.3b",
+    "gpt2-l": "gpt2-large",
+    "deberta-l": "microsoft/deberta-large-mnli",
+    "roberta-l": "roberta-large-mnli",
+    "uqa-l": "allenai/unifiedqa-t5-large",
 
     # XL models
     "gpt-j": "EleutherAI/gpt-j-6B",
