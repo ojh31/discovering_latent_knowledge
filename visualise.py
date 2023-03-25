@@ -2,8 +2,10 @@
 import json
 import pandas as pd
 import plotly.express as px
+import plotly.offline as off
 #%%
 EVAL_PATH = 'results.json'
+PLOT_DIR = 'plots'
 with open(EVAL_PATH, 'r') as f:
         eval_d = json.load(f)
     
@@ -53,6 +55,10 @@ fig = px.line(
 )
 # for annotation in fig['layout']['annotations']: 
 #     annotation['textangle']= 0
-fig.show()
+off.plot(
+    fig, 
+    filename=f'{PLOT_DIR}/accuracy_lr_vs_ccs.html',
+    auto_open=True,
+)
 
 # %%
