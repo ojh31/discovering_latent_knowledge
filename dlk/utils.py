@@ -17,6 +17,13 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelForMaske
 from datasets import load_dataset
 
 
+GENERATION_TYPES = [
+    'negative_hidden_states',
+    'positive_hidden_states',
+    'labels'
+]
+
+
 ############# Model loading and result saving #############
 
 # Map each model name to its full Huggingface name
@@ -169,6 +176,17 @@ def load_all_generations(args):
     labels = load_single_generation(args, generation_type="labels")
 
     return neg_hs, pos_hs, labels
+
+
+def check_generations_exist(args):
+    for gen_type in GENERATION_TYPES:
+        filename = generations_filename(
+            args, generation_type=gen_type
+        )
+        path = os.path.join(args.save_dir, filename)
+        if not os.path.isfile(path):
+            return False
+    return True
 
 
 ############# Data #############

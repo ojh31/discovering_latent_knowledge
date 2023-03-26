@@ -1,8 +1,13 @@
 import argparse
-from typing import List
-from dlk.utils import get_parser, load_model, get_dataloader, get_all_hidden_states, save_generations
+from dlk.utils import (
+    load_model, get_dataloader, get_all_hidden_states, save_generations, check_generations_exist
+)
 
 def run_gen(args: argparse.Namespace):
+
+    if check_generations_exist(args):
+        print('Skipping generation as files already exist')
+        return
 
     # Set up the model and data
     print("Loading model")
