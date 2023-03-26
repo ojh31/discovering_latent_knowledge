@@ -50,20 +50,21 @@ def plot_feature_importance(
     )
     
 
-def save_eval(val, reg, partition, args):
+def save_eval(val, kind, reg, partition, args):
     """
     Saves the evaluations to the eval file.
     """
     if args.verbose:
         print(
-            f'Evaluated {val} for model={args.model_name}, '
+            f'Evaluated {kind}={val} for model={args.model_name}, '
             f'reg={reg}, partition={partition}'
         )
     if args.eval_path is None:
         return
     key = (
         args_to_filename(args) + 
-        '__reg_' +  reg + 
+        '__kind_' + kind + 
+        '__reg_' + reg + 
         '__partition_' + partition
     )
     if os.path.isfile(args.eval_path):
@@ -116,8 +117,26 @@ def fit_lr(
     lr.fit(x_train, y_train)
     lr_train_acc = lr.score(x_train, y_train)
     lr_test_acc = lr.score(x_test, y_test)
-    save_eval(lr_train_acc, reg='lr', partition='train', args=args)
-    save_eval(lr_test_acc, reg='lr', partition='test', args=args)
+    save_eval(
+        lr_train_acc, kind='accuracy', reg='lr', partition='train', args=args
+    )
+    save_eval(
+        len(y_train), kind='n_samples', reg='lr', partition='train', args=args
+    )
+    save_eval(
+        x_train.shape[1], kind='n_features', reg='lr', partition='train', 
+        args=args
+    )
+    save_eval(
+        lr_test_acc, kind='accuracy', reg='lr', partition='test', args=args
+    )
+    save_eval(
+        len(y_test), kind='n_samples', reg='lr', partition='test', args=args
+    )
+    save_eval(
+        x_test.shape[1], kind='n_features', reg='lr', partition='test', 
+        args=args
+    )
     lr_fi = (x_train.std(0) * lr.coef_).squeeze()
     plot_feature_importance(lr_fi, 'LR', args)
     return lr_train_acc, lr_test_acc
@@ -274,9 +293,27 @@ def fit_ccs(
     if args.verbose:
         print(f'Training CCS completed in {time.time() - t0_train:.1f}s')
     ccs_train_acc = ccs.get_train_acc()
-    save_eval(ccs_train_acc, reg='ccs', partition='train', args=args)
+    save_eval(
+        ccs_train_acc, kind='accuracy', reg='ccs', partition='train', args=args,
+    )
+    save_eval(
+        len(y_train), kind='n_samples', reg='ccs', partition='train', args=args,
+    )
+    save_eval(
+        neg_hs_train.shape[1], kind='n_features', reg='ccs', partition='train', 
+        args=args,
+    )
     ccs_test_acc = ccs.get_test_acc()
-    save_eval(ccs_test_acc, reg='ccs', partition='test', args=args)
+    save_eval(
+        ccs_test_acc, kind='accuracy', reg='ccs', partition='test', args=args,
+    )
+    save_eval(
+        len(y_test), kind='n_samples', reg='ccs', partition='test', args=args,
+    )
+    save_eval(
+        neg_hs_test.shape[1], kind='n_features', reg='ccs', partition='test', 
+        args=args,
+    )
 
     if ccs.linear:
         ccs_fi = (ccs.best_probe[0].weight * ccs.pos_hs_train.std()).squeeze()
