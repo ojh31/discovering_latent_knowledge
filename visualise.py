@@ -11,7 +11,7 @@ with open(EVAL_PATH, 'r') as f:
     
 # %%
 df = pd.Series(eval_d).reset_index()
-df.columns = ['full_name', 'accuracy']
+df.columns = ['full_name', 'value']
 bool_cols = [
     'mean_normalize', 'var_normalize','all_layers'
 ]
@@ -22,9 +22,10 @@ int_cols = [
       'hidden_size', 'nepochs', 'ntries',
 ]
 str_cols = [
-    'model_name', 'dataset_name', 'partition', 'reg', 
+    'model_name', 'dataset_name', 'partition', 'reg', 'kind'
 ]
 cols_to_extract = bool_cols + float_cols + int_cols + str_cols
+df.full_name = df.full_name.str.replace('lr_inv_reg', 'lr_c')
 for col in cols_to_extract:
     df[col] = df.full_name.str.extract(f'{col}_((_?[^_]+)*)')[0]
     if col in bool_cols:
@@ -51,15 +52,31 @@ df.head()
 # %%
 # Train vs. test
 fig = px.line(
-    df, x='partition', y='accuracy', color='reg_key', 
-    facet_col='dataset_name', facet_row='model_name'
+    df.loc[df.kind.eq('accuracy')], x='partition', y='value', color='reg_key', 
+    facet_col='dataset_name', facet_row='model_name', title='Accuracy',
 )
-# for annotation in fig['layout']['annotations']: 
-#     annotation['textangle']= 0
-off.plot(
+fig.update_layout(dict(title_x=0.5))
+plot_path = off.plot(
     fig, 
     filename=f'{PLOT_DIR}/accuracy_lr_vs_ccs.html',
     auto_open=True,
 )
 
+# %%
+fig = px.line(
+    df.loc[
+        df.partition.eq('train') & 
+        df.kind.ne('accuracy') &
+        df.reg.eq('lr')
+    ], 
+    x='kind', y='value', color='reg_key', 
+    facet_col='dataset_name', facet_row='model_name', title='Samples vs. features',
+    # barmode='overlay',
+)
+fig.update_layout(dict(title_x=0.5))
+plot_path = off.plot(
+    fig, 
+    filename=f'{PLOT_DIR}/n_features_vs_samples.html',
+    auto_open=True,
+)
 # %%

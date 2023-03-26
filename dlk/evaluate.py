@@ -64,7 +64,7 @@ def save_eval(val, kind, reg, partition, args):
     key = (
         args_to_filename(args) + 
         '__kind_' + kind + 
-        '__reg_' + reg + 
+        '__regression_' + reg + 
         '__partition_' + partition
     )
     if os.path.isfile(args.eval_path):
