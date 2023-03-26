@@ -10,6 +10,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 import torch.nn.functional as F
+from torchtyping import TensorType as TT, patch_typeguard
 
 # make sure to install promptsource, transformers, and datasets!
 from promptsource.templates import DatasetTemplates
@@ -438,9 +439,10 @@ def get_first_mask_loc(mask, shift=False):
 
 
 def get_individual_hidden_states(
-        model, batch_ids, layer=None, all_layers=True, token_idx=-1, 
+        model, batch_ids, 
+        layer=None, all_layers=True, token_idx=-1, 
         model_type="encoder_decoder", use_decoder=False
-    ):
+    ) -> TT['b', 'h', 'l']:
     """
     Given a model and a batch of tokenized examples, returns the hidden states for either 
     a specified layer (if layer is a number) or for all layers (if all_layers is True).
@@ -449,6 +451,7 @@ def get_individual_hidden_states(
     This is necessary for getting the encoder hidden states for encoder-decoder models,
     but it is not necessary for encoder-only or decoder-only models.
     """
+    batch_size, seq_len = batch_ids['input_ids'].shape
     if use_decoder:
         assert "decoder" in model_type
         
@@ -464,15 +467,18 @@ def get_individual_hidden_states(
         hs_tuple = output["encoder_hidden_states"]
     else:
         hs_tuple = output["hidden_states"]
+    num_layers = len(hs_tuple) if all_layers else 1
+    assert hs_tuple[0].shape[:2] == (batch_size, seq_len)
+    d_model = hs_tuple[0].shape[-1]
 
     # just get the corresponding layer hidden states
     if all_layers:
         # stack along the last axis so that it's easier to consistently index the first two axes
-        hs = torch.stack([h.squeeze().detach().cpu() for h in hs_tuple], axis=-1)  # (bs, seq_len, dim, num_layers)
+        hs = torch.stack([h.detach().cpu() for h in hs_tuple], axis=-1)  # (bs, seq_len, dim, num_layers)
     else:
         assert layer is not None
         hs = hs_tuple[layer].unsqueeze(-1).detach().cpu()  # (bs, seq_len, dim, 1)
-
+    assert hs.shape == (batch_size, seq_len, d_model, num_layers)
     # we want to get the token corresponding to token_idx while ignoring the masked tokens
     if token_idx == 0:
         final_hs = hs[:, 0]  # (bs, dim, num_layers)
@@ -490,7 +496,7 @@ def get_individual_hidden_states(
         final_hs = hs[
             torch.arange(hs.size(0)), first_mask_loc+token_idx
         ]  # (bs, dim, num_layers)
-    
+    assert final_hs.shape == (batch_size, d_model, num_layers)
     return final_hs
 
 
