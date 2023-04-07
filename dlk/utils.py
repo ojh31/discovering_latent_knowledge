@@ -444,12 +444,16 @@ def get_individual_hidden_states(
         model_type="encoder_decoder", use_decoder=False
     ) -> TT['b', 'h', 'l']:
     """
-    Given a model and a batch of tokenized examples, returns the hidden states for either 
-    a specified layer (if layer is a number) or for all layers (if all_layers is True).
+    Given a model and a batch of tokenized examples, 
+    returns the hidden states for either 
+    a specified layer (if layer is a number) or 
+    for all layers (if all_layers is True).
     
-    If specify_encoder is True, uses "encoder_hidden_states" instead of "hidden_states"
-    This is necessary for getting the encoder hidden states for encoder-decoder models,
-    but it is not necessary for encoder-only or decoder-only models.
+    If specify_encoder is True, then
+    uses "encoder_hidden_states" instead of "hidden_states".
+    This is necessary for getting the encoder hidden states for 
+    encoder-decoder models, but it is not necessary for 
+    encoder-only or decoder-only models.
     """
     batch_size, seq_len = batch_ids['input_ids'].shape
     if use_decoder:
@@ -534,9 +538,8 @@ def get_all_hidden_states(
             model, pos_ids, layer=layer, all_layers=all_layers, token_idx=token_idx, 
             model_type=model_type, use_decoder=use_decoder
         )
-
-        if dataloader.batch_size == 1:
-            neg_hs, pos_hs = neg_hs.unsqueeze(0), pos_hs.unsqueeze(0)
+        assert neg_hs.shape[0] == dataloader.batch_size
+        assert pos_hs.shape[0] == dataloader.batch_size
 
         all_neg_hs.append(neg_hs)
         all_pos_hs.append(pos_hs)
