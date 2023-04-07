@@ -30,6 +30,7 @@ decorator==5.1.1
 defusedxml==0.7.1
 dill==0.3.6
 docker-pycreds==0.4.0
+einops==0.6.0
 entrypoints==0.4
 exceptiongroup==1.1.1
 executing==1.2.0
