@@ -1,6 +1,6 @@
 import os
 import argparse
-from typing import Union
+from typing import Union, Tuple
 import yaml
 
 import numpy as np
@@ -10,7 +10,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 import torch.nn.functional as F
-from torchtyping import TensorType as TT, patch_typeguard
+from torchtyping import TensorType as TT
 
 # make sure to install promptsource, transformers, and datasets!
 from promptsource.templates import DatasetTemplates
@@ -83,7 +83,7 @@ def get_parser():
     parser.add_argument("--token_idx", type=int, default=-1, help="Which token to use (by default the last token)")
     # saving the hidden states
     parser.add_argument("--save_dir", type=str, default="generated_hidden_states", help="Directory to save the hidden states")
-
+    parser.add_argument("--verbose", action="store_true")
     return parser
 
 
@@ -162,7 +162,10 @@ def save_generations(generation, args, generation_type):
         os.makedirs(args.save_dir)
 
     # save
-    np.save(os.path.join(args.save_dir, filename), generation)
+    file_path = os.path.join(args.save_dir, filename)
+    if args.verbose:
+        print(f'Saving {generation.shape} array to {file_path}')
+    np.save(file_path, generation)
 
 
 def load_single_generation(args, generation_type="hidden_states"):
@@ -507,7 +510,7 @@ def get_individual_hidden_states(
 def get_all_hidden_states(
         model, dataloader, layer=None, all_layers=True, token_idx=-1, 
         model_type="encoder_decoder", use_decoder=False
-    ):
+    ) -> Tuple[TT['b', 'h', 'l'], TT['b', 'h', 'l'], TT['b', 'h', 'l']]:
     """
     Given a model, a tokenizer, and a dataloader, returns the 
     hidden states (corresponding to a given position index) in 
