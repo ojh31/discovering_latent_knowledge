@@ -1,9 +1,9 @@
 import argparse
 import copy
+from einops import rearrange
 import json
 import numpy as np
 import os
-import sys
 import time
 import plotly.offline as off
 import plotly.express as px
@@ -80,7 +80,9 @@ def save_eval(val, kind, reg, partition, args):
 def split_train_test(neg_hs, pos_hs, y):
     # Make sure the shape is correct
     assert neg_hs.shape == pos_hs.shape
-    neg_hs, pos_hs = neg_hs[..., -1], pos_hs[..., -1]  # take the last layer
+    # Merge the layer and hidden dims
+    neg_hs = rearrange(neg_hs, 'n h l -> n (h l)')
+    pos_hs = rearrange(pos_hs, 'n h l -> n (h l)')
     if neg_hs.shape[1] == 1:  # T5 may have an extra dimension; if so, get rid of it
         neg_hs = neg_hs.squeeze(1)
         pos_hs = pos_hs.squeeze(1)

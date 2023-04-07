@@ -20,6 +20,7 @@ ARGS = argparse.Namespace(
     token_idx=-1,
     save_dir='generated_hidden_states',
     cache_dir=None,
+    verbose=False,
 )
 FILENAMES = [
     'negative_hidden_states__all_layers_False__batch_size_1__dataset_name_truthful_qa_multiple_choice__layer_-1__model_name_deberta-l__num_examples_10__parallelize_False__prompt_idx_0__seed_0__split_test__token_idx_-1__use_decoder_False.npy',

@@ -12,7 +12,6 @@ def parse_args(argv: List[str]):
     parser.add_argument("--ntries", type=int, default=10)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--ccs_batch_size", type=int, default=-1)
-    parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--ccs_device", type=str, default="cuda")
     parser.add_argument('--hidden_size', type=int, default=None)
     parser.add_argument("--weight_decay", type=float, default=0.01)

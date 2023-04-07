@@ -1,6 +1,6 @@
 import os
 import argparse
-from typing import Union
+from typing import Union, Tuple
 import yaml
 
 import numpy as np
@@ -10,6 +10,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 import torch.nn.functional as F
+from torchtyping import TensorType as TT
 
 # make sure to install promptsource, transformers, and datasets!
 from promptsource.templates import DatasetTemplates
@@ -82,7 +83,7 @@ def get_parser():
     parser.add_argument("--token_idx", type=int, default=-1, help="Which token to use (by default the last token)")
     # saving the hidden states
     parser.add_argument("--save_dir", type=str, default="generated_hidden_states", help="Directory to save the hidden states")
-
+    parser.add_argument("--verbose", action="store_true")
     return parser
 
 
@@ -161,7 +162,10 @@ def save_generations(generation, args, generation_type):
         os.makedirs(args.save_dir)
 
     # save
-    np.save(os.path.join(args.save_dir, filename), generation)
+    file_path = os.path.join(args.save_dir, filename)
+    if args.verbose:
+        print(f'Saving {generation.shape} array to {file_path}')
+    np.save(file_path, generation)
 
 
 def load_single_generation(args, generation_type="hidden_states"):
@@ -438,17 +442,23 @@ def get_first_mask_loc(mask, shift=False):
 
 
 def get_individual_hidden_states(
-        model, batch_ids, layer=None, all_layers=True, token_idx=-1, 
+        model, batch_ids, 
+        layer=None, all_layers=True, token_idx=-1, 
         model_type="encoder_decoder", use_decoder=False
-    ):
+    ) -> TT['b', 'h', 'l']:
     """
-    Given a model and a batch of tokenized examples, returns the hidden states for either 
-    a specified layer (if layer is a number) or for all layers (if all_layers is True).
+    Given a model and a batch of tokenized examples, 
+    returns the hidden states for either 
+    a specified layer (if layer is a number) or 
+    for all layers (if all_layers is True).
     
-    If specify_encoder is True, uses "encoder_hidden_states" instead of "hidden_states"
-    This is necessary for getting the encoder hidden states for encoder-decoder models,
-    but it is not necessary for encoder-only or decoder-only models.
+    If specify_encoder is True, then
+    uses "encoder_hidden_states" instead of "hidden_states".
+    This is necessary for getting the encoder hidden states for 
+    encoder-decoder models, but it is not necessary for 
+    encoder-only or decoder-only models.
     """
+    batch_size, seq_len = batch_ids['input_ids'].shape
     if use_decoder:
         assert "decoder" in model_type
         
@@ -464,15 +474,18 @@ def get_individual_hidden_states(
         hs_tuple = output["encoder_hidden_states"]
     else:
         hs_tuple = output["hidden_states"]
+    num_layers = len(hs_tuple) if all_layers else 1
+    assert hs_tuple[0].shape[:2] == (batch_size, seq_len)
+    d_model = hs_tuple[0].shape[-1]
 
     # just get the corresponding layer hidden states
     if all_layers:
         # stack along the last axis so that it's easier to consistently index the first two axes
-        hs = torch.stack([h.squeeze().detach().cpu() for h in hs_tuple], axis=-1)  # (bs, seq_len, dim, num_layers)
+        hs = torch.stack([h.detach().cpu() for h in hs_tuple], axis=-1)  # (bs, seq_len, dim, num_layers)
     else:
         assert layer is not None
         hs = hs_tuple[layer].unsqueeze(-1).detach().cpu()  # (bs, seq_len, dim, 1)
-
+    assert hs.shape == (batch_size, seq_len, d_model, num_layers)
     # we want to get the token corresponding to token_idx while ignoring the masked tokens
     if token_idx == 0:
         final_hs = hs[:, 0]  # (bs, dim, num_layers)
@@ -490,14 +503,14 @@ def get_individual_hidden_states(
         final_hs = hs[
             torch.arange(hs.size(0)), first_mask_loc+token_idx
         ]  # (bs, dim, num_layers)
-    
+    assert final_hs.shape == (batch_size, d_model, num_layers)
     return final_hs
 
 
 def get_all_hidden_states(
         model, dataloader, layer=None, all_layers=True, token_idx=-1, 
         model_type="encoder_decoder", use_decoder=False
-    ):
+    ) -> Tuple[TT['b', 'h', 'l'], TT['b', 'h', 'l'], TT['b', 'h', 'l']]:
     """
     Given a model, a tokenizer, and a dataloader, returns the 
     hidden states (corresponding to a given position index) in 
@@ -528,9 +541,8 @@ def get_all_hidden_states(
             model, pos_ids, layer=layer, all_layers=all_layers, token_idx=token_idx, 
             model_type=model_type, use_decoder=use_decoder
         )
-
-        if dataloader.batch_size == 1:
-            neg_hs, pos_hs = neg_hs.unsqueeze(0), pos_hs.unsqueeze(0)
+        assert neg_hs.shape[0] == dataloader.batch_size
+        assert pos_hs.shape[0] == dataloader.batch_size
 
         all_neg_hs.append(neg_hs)
         all_pos_hs.append(pos_hs)
