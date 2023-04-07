@@ -22,7 +22,7 @@ int_cols = [
       'hidden_size', 'nepochs', 'ntries',
 ]
 str_cols = [
-    'model_name', 'dataset_name', 'partition', 'reg', 'kind'
+    'model_name', 'dataset_name', 'partition', 'regression', 'kind'
 ]
 cols_to_extract = bool_cols + float_cols + int_cols + str_cols
 df.full_name = df.full_name.str.replace('lr_inv_reg', 'lr_c')
@@ -33,7 +33,7 @@ for col in cols_to_extract:
 df = df.astype({col: float for col in float_cols})
 df.dataset_name = df.dataset_name.str.replace('_multiple_choice', '')
 df['reg_key'] = (
-    df.reg +
+    df.regression +
     '_layers_' +
     df.all_layers.map({True: 'all', False: 'last'})
     # '_nml_' +
@@ -67,7 +67,7 @@ fig = px.line(
     df.loc[
         df.partition.eq('train') & 
         df.kind.ne('accuracy') &
-        df.reg.eq('lr')
+        df.regression.eq('lr')
     ], 
     x='kind', y='value', color='reg_key', 
     facet_col='dataset_name', facet_row='model_name', title='Samples vs. features',
