@@ -147,15 +147,23 @@ def args_to_filename(args: Union[dict, argparse.Namespace]):
 def generations_filename(args, generation_type):
     return generation_type + "__" + args_to_filename(args) + ".npy".format(generation_type)
 
-def save_generations(generation, args, generation_type):
+
+def save_generations(
+        generation: np.ndarray, args: argparse.Namespace, generation_type: str,
+    ):
     """
     Input: 
-        generation: numpy array (e.g. hidden_states or labels) to save
-        args: arguments used to generate the hidden states. This is used for the filename to save to.
-        generation_type: one of "negative_hidden_states" or "positive_hidden_states" or "labels"
+        generation: 
+            numpy array (e.g. hidden_states or labels) to save
+        args: 
+            arguments used to generate the hidden states. 
+            This is used for the filename to save to.
+        generation_type: 
+            one of "negative_hidden_states" or "positive_hidden_states" or "labels"
 
     Saves the generations to an appropriate directory.
     """
+    assert not np.isnan(generation).any()
     filename = generations_filename(args, generation_type)
     # create save directory if it doesn't exist
     if not os.path.exists(args.save_dir):
@@ -170,7 +178,9 @@ def save_generations(generation, args, generation_type):
 
 def load_single_generation(args, generation_type="hidden_states"):
     filename = generations_filename(args, generation_type)
-    return np.load(os.path.join(args.save_dir, filename))
+    loaded = np.load(os.path.join(args.save_dir, filename))
+    assert not np.isnan(loaded).any()
+    return loaded
 
 
 def load_all_generations(args):
@@ -178,7 +188,6 @@ def load_all_generations(args):
     neg_hs = load_single_generation(args, generation_type="negative_hidden_states")
     pos_hs = load_single_generation(args, generation_type="positive_hidden_states")
     labels = load_single_generation(args, generation_type="labels")
-
     return neg_hs, pos_hs, labels
 
 
@@ -206,9 +215,11 @@ class ContrastDataset(Dataset):
     """
     def __init__(
         self, raw_dataset, tokenizer, all_prompts, prompt_idx, 
-        model_type="encoder_decoder", use_decoder=False, device="cuda"
+        model_type="encoder_decoder", use_decoder=False, device="cuda",
+        seed=None,
 ):
-
+        np.random.seed(seed=seed)
+        self.idxs_to_flip = np.random.randint(2, size=len(raw_dataset))
         # data and tokenizer
         self.raw_dataset = raw_dataset
         self.tokenizer = tokenizer
@@ -226,10 +237,8 @@ class ContrastDataset(Dataset):
         prompt_name_list = list(all_prompts.name_to_id_mapping.keys())
         self.prompt = all_prompts[prompt_name_list[prompt_idx]]
 
-        self.is_multiple_choice = 'mc1_targets' in self.raw_dataset[0]
-
     def __len__(self):
-        return len(self.raw_dataset) * (2 if self.is_multiple_choice else 1)
+        return len(self.raw_dataset)
 
     def encode(self, nl_prompt):
         """
@@ -312,11 +321,17 @@ class ContrastDataset(Dataset):
 
     def __getitem__(self, index):
         # get the original example
-        is_odd = None
-        if self.is_multiple_choice:
-            is_odd = index % 2
-            index //= 2
         data = self.raw_dataset[int(index)]
+
+        # Hack truthful_qa so that the true prompt is not always first
+        if 'mc1_targets' in data:
+            assert data['mc1_targets']['labels'][:2] == [1, 0]
+            choices = data['mc1_targets']['choices'][:2]
+            true_answer = self.idxs_to_flip[index]
+            data['label'] = true_answer
+            data['choices'] = [choices[true_answer], choices[1 - true_answer]]
+            data.pop('mc1_targets')
+            data.pop('mc2_targets')
 
         # get the possible labels
         # (for simplicity assume the binary case for contrast pairs)
@@ -329,17 +344,9 @@ class ContrastDataset(Dataset):
 
         # reconvert to dataset format but with fake/candidate labels to 
         # create the contrast pair
-        if self.is_multiple_choice:
-            question = data['question']
-            answer = data['mc1_targets']['choices'][is_odd]
-            true_answer = data['mc1_targets']['labels'][is_odd]
-            neg_example = {"question": question, "answer": answer, "label": 0}
-            pos_example = {"question": question, "answer": answer, "label": 1}
-        else:
-            text = data.get('text', data.get('content'))
-            true_answer = data["label"]
-            neg_example = {"text": text, "label": 0}
-            pos_example = {"text": text, "label": 1}
+        true_answer = data["label"]
+        neg_example = {k: v if k != 'label' else 0 for k, v in data.items() }
+        pos_example = {k: v if k != 'label' else 1 for k, v in data.items() }
 
         # construct contrast pairs by answering the prompt with the two different possible labels
         # (for example, label 0 might be mapped to "no" and label 1 might be mapped to "yes")
@@ -363,17 +370,19 @@ class ContrastDataset(Dataset):
 
 def get_templates(dataset_name: str) -> DatasetTemplates:
     all_prompts = DatasetTemplates(dataset_name)
-    if len(all_prompts) == 0 and dataset_name == 'truthful_qa':
-        yaml_dict = yaml.load(open('templates.yaml', "r"), Loader=yaml.FullLoader)
+    if len(all_prompts) == 0:
+        yaml_path = os.path.join('templates', dataset_name, 'templates.yaml')
+        with open(yaml_path, 'r') as yaml_file:
+            yaml_dict = yaml.load(yaml_file, Loader=yaml.FullLoader)
         all_prompts.templates = yaml_dict[all_prompts.TEMPLATES_KEY]
         all_prompts.sync_mapping()
+    assert len(all_prompts) > 0
     return all_prompts
 
     
 def get_dataloader(
     dataset_name, split, tokenizer, prompt_idx, batch_size=16, num_examples=1000,
-    seed=0,
-    model_type="encoder_decoder", use_decoder=False, device="cuda", pin_memory=True, 
+    seed=0, model_type="encoder_decoder", use_decoder=False, device="cuda", pin_memory=True, 
     num_workers=1,
 ):
     """
@@ -397,17 +406,17 @@ def get_dataloader(
     all_prompts = get_templates(dataset_name=dataset_name)
 
     # create the ConstrastDataset
-    contrast_dataset = ContrastDataset(raw_dataset, tokenizer, all_prompts, prompt_idx, 
-                                       model_type=model_type, use_decoder=use_decoder, 
-                                       device=device)
+    contrast_dataset = ContrastDataset(
+        raw_dataset, tokenizer, all_prompts, prompt_idx, 
+        model_type=model_type, use_decoder=use_decoder, 
+        device=device, seed=seed,
+    )
 
     # get a random permutation of the indices; we'll take the first num_examples of these that do not get truncated
     np.random.seed(seed=seed)
     random_idxs = np.random.permutation(len(contrast_dataset))
 
     # remove examples that would be truncated (since this messes up contrast pairs)
-    prompt_name_list = list(all_prompts.name_to_id_mapping.keys())
-    prompt = all_prompts[prompt_name_list[prompt_idx]]
     keep_idxs = []
     for idx in random_idxs:
         truncated = contrast_dataset[int(idx)][-1]
@@ -552,6 +561,8 @@ def get_all_hidden_states(
     all_pos_hs = np.concatenate(all_pos_hs, axis=0)
     all_gt_labels = np.concatenate(all_gt_labels, axis=0)
 
+    assert all_gt_labels.std() > 0, f'All labels are the same: {all_gt_labels[0]}'
+
     return all_neg_hs, all_pos_hs, all_gt_labels
 
 ############# CCS #############
@@ -596,16 +607,19 @@ class LatentKnowledgeMethod(object):
         self.y_test = y_test
         self.d = self.neg_hs_train.shape[-1]
 
-    def normalize(self, x):
+    def normalize(self, x: np.ndarray) -> np.ndarray:
         """
         Mean-normalizes the data x (of shape (n, d))
         If self.var_normalize, also divides by the standard deviation
         """
+        mu = x.mean(axis=0, keepdims=True)
+        sigma = x.std(axis=0, keepdims=True)
+        if (sigma == 0).all():
+            print(f'WARN: all std devs are zero!')
         if self.mean_normalize:
-            x = x - x.mean(axis=0, keepdims=True)
+            x -= mu
         if self.var_normalize:
-            x /= x.std(axis=0, keepdims=True)
-
+            x /= np.where(sigma > 0, sigma, 1)
         return x
     
     def get_tensor_data(self, x0=None, x1=None):
