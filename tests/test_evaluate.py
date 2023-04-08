@@ -72,17 +72,17 @@ class TestEvaluate(ut.TestCase):
     def testLRTestAcc(self):
         np.testing.assert_allclose(
             self.lr_test_acc,
-            1.0
+            0.4
         )
 
     def testCCSTrainAcc(self):
         np.testing.assert_allclose(
             self.ccs_train_acc,
-            0.6
+            0.8
         )
 
     def testCCSTestAcc(self):
         np.testing.assert_allclose(
             self.ccs_train_acc,
-            0.6
+            0.8
         )

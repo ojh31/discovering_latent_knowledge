@@ -215,9 +215,11 @@ class ContrastDataset(Dataset):
     """
     def __init__(
         self, raw_dataset, tokenizer, all_prompts, prompt_idx, 
-        model_type="encoder_decoder", use_decoder=False, device="cuda"
+        model_type="encoder_decoder", use_decoder=False, device="cuda",
+        seed=None,
 ):
-
+        np.random.seed(seed=seed)
+        self.idxs_to_flip = np.random.randint(2, size=len(raw_dataset))
         # data and tokenizer
         self.raw_dataset = raw_dataset
         self.tokenizer = tokenizer
@@ -235,10 +237,8 @@ class ContrastDataset(Dataset):
         prompt_name_list = list(all_prompts.name_to_id_mapping.keys())
         self.prompt = all_prompts[prompt_name_list[prompt_idx]]
 
-        self.has_double_prompts = 'mc2_targets' in self.raw_dataset[0]
-
     def __len__(self):
-        return len(self.raw_dataset) * (2 if self.has_double_prompts else 1)
+        return len(self.raw_dataset)
 
     def encode(self, nl_prompt):
         """
@@ -321,11 +321,17 @@ class ContrastDataset(Dataset):
 
     def __getitem__(self, index):
         # get the original example
-        is_odd = None
-        if self.has_double_prompts:
-            is_odd = index % 2
-            index //= 2
         data = self.raw_dataset[int(index)]
+
+        # Hack truthful_qa so that the true prompt is not always first
+        if 'mc1_targets' in data:
+            assert data['mc1_targets']['labels'][:2] == [1, 0]
+            choices = data['mc1_targets']['choices'][:2]
+            true_answer = self.idxs_to_flip[index]
+            data['label'] = true_answer
+            data['choices'] = [choices[true_answer], choices[1 - true_answer]]
+            data.pop('mc1_targets')
+            data.pop('mc2_targets')
 
         # get the possible labels
         # (for simplicity assume the binary case for contrast pairs)
@@ -338,17 +344,7 @@ class ContrastDataset(Dataset):
 
         # reconvert to dataset format but with fake/candidate labels to 
         # create the contrast pair
-        if 'mc1_targets' in data:
-            data.update(data['mc1_targets'])
-            data.pop('mc2_targets')
-        if 'choices' in data:
-            question = data['question']
-            answer = data['choices'][is_odd]
-            true_answer = data['labels'][is_odd]
-            neg_example = {"question": question, "answer": answer, "label": 0}
-            pos_example = {"question": question, "answer": answer, "label": 1}
-        else:
-            true_answer = data["label"]
+        true_answer = data["label"]
         neg_example = {k: v if k != 'label' else 0 for k, v in data.items() }
         pos_example = {k: v if k != 'label' else 1 for k, v in data.items() }
 
@@ -374,8 +370,10 @@ class ContrastDataset(Dataset):
 
 def get_templates(dataset_name: str) -> DatasetTemplates:
     all_prompts = DatasetTemplates(dataset_name)
-    if len(all_prompts) == 0 and dataset_name == 'truthful_qa':
-        yaml_dict = yaml.load(open('templates.yaml', "r"), Loader=yaml.FullLoader)
+    if len(all_prompts) == 0:
+        yaml_path = os.path.join('templates', dataset_name, 'templates.yaml')
+        with open(yaml_path, 'r') as yaml_file:
+            yaml_dict = yaml.load(yaml_file, Loader=yaml.FullLoader)
         all_prompts.templates = yaml_dict[all_prompts.TEMPLATES_KEY]
         all_prompts.sync_mapping()
     assert len(all_prompts) > 0
@@ -384,8 +382,7 @@ def get_templates(dataset_name: str) -> DatasetTemplates:
     
 def get_dataloader(
     dataset_name, split, tokenizer, prompt_idx, batch_size=16, num_examples=1000,
-    seed=0,
-    model_type="encoder_decoder", use_decoder=False, device="cuda", pin_memory=True, 
+    seed=0, model_type="encoder_decoder", use_decoder=False, device="cuda", pin_memory=True, 
     num_workers=1,
 ):
     """
@@ -409,17 +406,17 @@ def get_dataloader(
     all_prompts = get_templates(dataset_name=dataset_name)
 
     # create the ConstrastDataset
-    contrast_dataset = ContrastDataset(raw_dataset, tokenizer, all_prompts, prompt_idx, 
-                                       model_type=model_type, use_decoder=use_decoder, 
-                                       device=device)
+    contrast_dataset = ContrastDataset(
+        raw_dataset, tokenizer, all_prompts, prompt_idx, 
+        model_type=model_type, use_decoder=use_decoder, 
+        device=device, seed=seed,
+    )
 
     # get a random permutation of the indices; we'll take the first num_examples of these that do not get truncated
     np.random.seed(seed=seed)
     random_idxs = np.random.permutation(len(contrast_dataset))
 
     # remove examples that would be truncated (since this messes up contrast pairs)
-    prompt_name_list = list(all_prompts.name_to_id_mapping.keys())
-    prompt = all_prompts[prompt_name_list[prompt_idx]]
     keep_idxs = []
     for idx in random_idxs:
         truncated = contrast_dataset[int(idx)][-1]
