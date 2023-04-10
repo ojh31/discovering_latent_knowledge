@@ -185,6 +185,7 @@ class CCS(LatentKnowledgeMethod):
         mean_normalize: bool = True,
         var_normalize: bool = True,
         wandb_enabled: bool = False,
+        log_freq: int = 1000,
     ):
         super().__init__(
             neg_hs_train=neg_hs_train, 
@@ -207,6 +208,7 @@ class CCS(LatentKnowledgeMethod):
         self.weight_decay = weight_decay
         self.seed = seed
         self.wandb_enabled = wandb_enabled
+        self.log_freq = log_freq
         
         # probe
         self.hidden_size = hidden_size
@@ -280,6 +282,11 @@ class CCS(LatentKnowledgeMethod):
                         'batch_total_loss': total_loss,
                     }
                     wandb.log(log_d, step=self.step_num)
+                if self.wandb_enabled and self.step_num % self.log_freq == 0:
+                    wandb.log({
+                        'train_accuracy': self.get_train_acc(best=False)[0],
+                        'test_accuracy': self.get_test_acc(best=False)[0],
+                    }, step=self.step_num)
                 self.step_num += 1
                         
         return (
@@ -296,12 +303,11 @@ class CCS(LatentKnowledgeMethod):
             if total_loss < best_loss:
                 self.best_probe = copy.deepcopy(self.probe)
                 best_loss = total_loss
-            if self.wandb_enabled:
-                wandb.log({
-                    'seed_train_accuracy': self.get_train_acc()[0],
-                    'seed_test_accuracy': self.get_test_acc()[0],
-                }, step=self.step_num)
-
+                if self.wandb_enabled:
+                    wandb.log({
+                        'best_train_accuracy': self.get_train_acc(best=True)[0],
+                        'best_test_accuracy': self.get_test_acc(best=True)[0],
+                    }, step=self.step_num)
         return best_loss
 
 
@@ -325,6 +331,7 @@ def fit_ccs(
         weight_decay=args.weight_decay, 
         var_normalize=args.var_normalize,
         wandb_enabled=args.wandb_enabled,
+        log_freq=args.ccs_log_freq,
     )
     # train
     if args.verbose:

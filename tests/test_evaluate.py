@@ -47,6 +47,7 @@ ARGS = argparse.Namespace(
     mean_normalize=True,
     var_normalize=True,
     wandb_enabled=False,
+    log_freq=1,
     eval_path=None,
     plot_dir=None,
     verbose=True,
