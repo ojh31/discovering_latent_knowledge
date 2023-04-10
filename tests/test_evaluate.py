@@ -2,6 +2,7 @@ import argparse
 import numpy as np
 import unittest as ut
 from dlk.evaluate import run_eval
+from dlk.utils import REF_ROOT
 
 GEN_ARGS = argparse.Namespace(
     device='cpu',
@@ -17,7 +18,7 @@ GEN_ARGS = argparse.Namespace(
     layer=-1,
     all_layers=False,
     token_idx=-1,
-    save_dir='reference_hidden_states',
+    save_dir=REF_ROOT,
 )
 ARGS = argparse.Namespace(
     device='cpu',
@@ -33,7 +34,7 @@ ARGS = argparse.Namespace(
     layer=-1,
     all_layers=False,
     token_idx=-1,
-    save_dir='reference_hidden_states',
+    save_dir=REF_ROOT,
     cache_dir=None,
 
     ccs_batch_size=-1,

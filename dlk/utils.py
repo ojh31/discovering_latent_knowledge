@@ -23,6 +23,7 @@ GENERATION_TYPES = [
     'positive_hidden_states',
     'labels'
 ]
+REF_ROOT = 'reference_hidden_states'
 
 
 ############# Model loading and result saving #############
@@ -398,7 +399,9 @@ def get_dataloader(
     else:
         config_name = None
     ds = load_dataset(dataset_name, name=config_name)
-    if split == 'test' and split not in ds:
+    if split == 'test' and (split not in ds or dataset_name == 'piqa'):
+        # Some datasets are missing a test partition
+        # The piqa dataset has a bug in the test partition
         split = 'validation'
     raw_dataset = ds[split]
 
@@ -630,22 +633,39 @@ class LatentKnowledgeMethod(object):
             x0 = self.neg_hs_train
         if x1 is None:
             x1 = self.pos_hs_train
-        x0 = torch.tensor(x0, dtype=torch.float, requires_grad=False, device=self.device)
-        x1 = torch.tensor(x1, dtype=torch.float, requires_grad=False, device=self.device)
+        x0 = torch.tensor(
+            x0, dtype=torch.float, requires_grad=False, device=self.device
+        )
+        x1 = torch.tensor(
+            x1, dtype=torch.float, requires_grad=False, device=self.device
+        )
         return x0, x1
     
-    def get_acc(self, x0_val, x1_val, y_val):
+    def get_acc(
+            self, x0_val: np.ndarray, x1_val: np.ndarray, y_val: np.ndarray
+        ) -> Tuple[float, np.ndarray]:
         """
         Computes accuracy for the current parameters on the given test inputs
+
+        x0_val: negative hidden states, numpy array
+        x1_val: positive hidden states, numpy array
+        y_val: true labels, numpy array
         """
         x0, x1 = self.get_tensor_data(x0_val, x1_val)
         with torch.no_grad():
             p0, p1 = self.best_probe(x0), self.best_probe(x1)
-        avg_confidence = 0.5 * (p0 + (1 - p1))
-        predictions = (avg_confidence.detach().cpu().numpy() < 0.5).astype(int)[:, 0]
-        acc = (predictions == y_val).mean()
-        acc = max(acc, 1 - acc)
-        return acc
+        avg_confidence = (0.5 * (p0 + (1 - p1)))[:, 0]
+        avg_conf_values = avg_confidence.detach().cpu().numpy()
+        predictions = (avg_conf_values > 0.5).astype(int)
+        correct_mask = predictions == y_val
+        acc = correct_mask.mean()
+        if acc < 0.5:
+            # reverse the predictions
+            avg_confidence = 1 - avg_confidence
+            correct_mask = ~correct_mask
+            acc = 1 - acc
+        conf = np.where(y_val > 0, avg_conf_values, 1 - avg_conf_values)
+        return acc, conf
     
     def get_train_acc(self):
         return self.get_acc(self.neg_hs_train, self.pos_hs_train, self.y_train)

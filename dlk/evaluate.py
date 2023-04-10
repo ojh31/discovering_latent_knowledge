@@ -54,7 +54,9 @@ def save_eval(val, kind, reg, partition, args):
     """
     Saves the evaluations to the eval file.
     """
-    if args.verbose:
+    if isinstance(val, np.ndarray):
+        val = val.tolist()
+    elif args.verbose:
         print(
             f'Evaluated {kind}={val} for model={args.model_name}, '
             f'reg={reg}, partition={partition}'
@@ -83,10 +85,12 @@ def split_train_test(neg_hs, pos_hs, y):
     # Merge the layer and hidden dims
     neg_hs = rearrange(neg_hs, 'n h l -> n (h l)')
     pos_hs = rearrange(pos_hs, 'n h l -> n (h l)')
-    if neg_hs.shape[1] == 1:  # T5 may have an extra dimension; if so, get rid of it
+    if neg_hs.shape[1] == 1:  
+        # T5 may have an extra dimension; if so, get rid of it
         neg_hs = neg_hs.squeeze(1)
         pos_hs = pos_hs.squeeze(1)
-    # Very simple train/test split (using the fact that the data is already shuffled)
+    # Very simple train/test split 
+    # using the fact that the data is already shuffled
     neg_hs_train, neg_hs_test = neg_hs[:len(neg_hs) // 2], neg_hs[len(neg_hs) // 2:]
     pos_hs_train, pos_hs_test = pos_hs[:len(pos_hs) // 2], pos_hs[len(pos_hs) // 2:]
     y_train, y_test = y[:len(y) // 2], y[len(y) // 2:]
@@ -97,7 +101,10 @@ def split_train_test(neg_hs, pos_hs, y):
     )
 
 def fit_lr(
-    neg_hs_train, pos_hs_train, neg_hs_test, pos_hs_test, y_train, y_test, args
+    neg_hs_train: np.ndarray, pos_hs_train: np.ndarray, 
+    neg_hs_test: np.ndarray, pos_hs_test: np.ndarray, 
+    y_train: np.ndarray, y_test: np.ndarray, 
+    args: argparse.Namespace,
 ):
     # Make sure logistic regression accuracy is reasonable; otherwise our method won't have much of a chance of working
     # you can also concatenate, but this works fine and is more comparable to CCS inputs
@@ -118,9 +125,19 @@ def fit_lr(
         )
     lr.fit(x_train, y_train)
     lr_train_acc = lr.score(x_train, y_train)
+    lr_train_conf = lr.predict_proba(x_train)[
+        np.arange(len(y_train)), y_train
+    ]
     lr_test_acc = lr.score(x_test, y_test)
+    lr_test_conf = lr.predict_proba(x_test)[
+        np.arange(len(y_test)), y_test
+    ]
+    
     save_eval(
         lr_train_acc, kind='accuracy', reg='lr', partition='train', args=args
+    )
+    save_eval(
+        lr_train_conf, kind='confidence', reg='lr', partition='train', args=args
     )
     save_eval(
         len(y_train), kind='n_samples', reg='lr', partition='train', args=args
@@ -131,6 +148,9 @@ def fit_lr(
     )
     save_eval(
         lr_test_acc, kind='accuracy', reg='lr', partition='test', args=args
+    )
+    save_eval(
+        lr_test_conf, kind='confidence', reg='lr', partition='train', args=args
     )
     save_eval(
         len(y_test), kind='n_samples', reg='lr', partition='test', args=args
@@ -256,8 +276,8 @@ class CCS(LatentKnowledgeMethod):
                 best_loss = loss
                 if self.wandb_enabled:
                     wandb.log({
-                        'train_accuracy': self.get_train_acc(),
-                        'test_accuracy': self.get_test_acc(),
+                        'train_accuracy': self.get_train_acc()[0],
+                        'test_accuracy': self.get_test_acc()[0],
                     }, step=train_num)
             if self.wandb_enabled:
                 wandb.log({'loss': loss}, step=train_num)
@@ -294,9 +314,12 @@ def fit_ccs(
     ccs.repeated_train()
     if args.verbose:
         print(f'Training CCS completed in {time.time() - t0_train:.1f}s')
-    ccs_train_acc = ccs.get_train_acc()
+    ccs_train_acc, ccs_train_conf = ccs.get_train_acc()
     save_eval(
         ccs_train_acc, kind='accuracy', reg='ccs', partition='train', args=args,
+    )
+    save_eval(
+        ccs_train_conf, kind='confidence', reg='ccs', partition='train', args=args,
     )
     save_eval(
         len(y_train), kind='n_samples', reg='ccs', partition='train', args=args,
@@ -305,9 +328,12 @@ def fit_ccs(
         neg_hs_train.shape[1], kind='n_features', reg='ccs', partition='train', 
         args=args,
     )
-    ccs_test_acc = ccs.get_test_acc()
+    ccs_test_acc, ccs_test_conf = ccs.get_test_acc()
     save_eval(
         ccs_test_acc, kind='accuracy', reg='ccs', partition='test', args=args,
+    )
+    save_eval(
+        ccs_test_conf, kind='confidence', reg='ccs', partition='test', args=args,
     )
     save_eval(
         len(y_test), kind='n_samples', reg='ccs', partition='test', args=args,
