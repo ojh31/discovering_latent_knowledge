@@ -3,7 +3,10 @@ import numpy as np
 import os
 import unittest as ut
 from dlk.generate import run_gen
+from dlk.utils import REF_ROOT
 
+
+GEN_ROOT = 'generated_hidden_states'
 ARGS = argparse.Namespace(
     device='cpu',
     model_name='deberta-l',
@@ -18,7 +21,7 @@ ARGS = argparse.Namespace(
     layer=-1,
     all_layers=False,
     token_idx=-1,
-    save_dir='generated_hidden_states',
+    save_dir=GEN_ROOT,
     cache_dir=None,
     verbose=False,
 )
@@ -27,8 +30,6 @@ FILENAMES = [
     'positive_hidden_states__all_layers_False__batch_size_1__dataset_name_truthful_qa_multiple_choice__layer_-1__model_name_deberta-l__num_examples_10__parallelize_False__prompt_idx_0__seed_0__split_test__token_idx_-1__use_decoder_False.npy', 
     'labels__all_layers_False__batch_size_1__dataset_name_truthful_qa_multiple_choice__layer_-1__model_name_deberta-l__num_examples_10__parallelize_False__prompt_idx_0__seed_0__split_test__token_idx_-1__use_decoder_False.npy', 
 ]
-REF_ROOT = 'reference_hidden_states'
-GEN_ROOT = 'generated_hidden_states'
 
 
 def clear_cached_files():
