@@ -39,6 +39,7 @@ ARGS = argparse.Namespace(
 
     ccs_batch_size=-1,
     ccs_device='cpu',
+    ccs_log_freq=1,
     hidden_size=0,
     lr=1e-3,
     weight_decay=.01,
@@ -47,7 +48,6 @@ ARGS = argparse.Namespace(
     mean_normalize=True,
     var_normalize=True,
     wandb_enabled=False,
-    log_freq=1,
     eval_path=None,
     plot_dir=None,
     verbose=True,
