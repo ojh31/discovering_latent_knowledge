@@ -10,7 +10,7 @@ import plotly.express as px
 from sklearn.linear_model import LogisticRegression
 import torch
 import torch.nn as nn
-from typing import Union
+from typing import Union, Tuple
 import wandb
 from dlk.utils import (
     load_all_generations, MLPProbe, LatentKnowledgeMethod, args_to_filename
@@ -185,6 +185,7 @@ class CCS(LatentKnowledgeMethod):
         mean_normalize: bool = True,
         var_normalize: bool = True,
         wandb_enabled: bool = False,
+        log_freq: int = 1000,
     ):
         super().__init__(
             neg_hs_train=neg_hs_train, 
@@ -207,12 +208,15 @@ class CCS(LatentKnowledgeMethod):
         self.weight_decay = weight_decay
         self.seed = seed
         self.wandb_enabled = wandb_enabled
+        self.log_freq = log_freq
         
         # probe
         self.hidden_size = hidden_size
         self.linear = hidden_size is None or (hidden_size == 0)
         self.probe = self.initialize_probe()
         self.best_probe = copy.deepcopy(self.probe)
+        
+        self.step_num = 0
 
         
     def initialize_probe(self):
@@ -223,31 +227,37 @@ class CCS(LatentKnowledgeMethod):
         self.probe.to(self.device)    
     
 
-    def get_loss(self, p0, p1):
+    def get_loss(
+            self, p0: torch.Tensor, p1: torch.Tensor
+        ) -> Tuple[float, float, float]:
         """
         Returns the CCS loss for two probabilities each of shape (n,1) or (n,)
         """
-        informative_loss = (torch.min(p0, p1)**2).mean(0)
         consistent_loss = ((p0 - (1-p1))**2).mean(0)
-        return informative_loss + consistent_loss
+        contrast_loss = (torch.min(p0, p1)**2).mean(0)
+        return consistent_loss, contrast_loss, contrast_loss + consistent_loss
     
         
-    def train(self):
+    def train(self) -> float:
         """
         Does a single training run of nepochs epochs
+        Returns the final loss split by type
         """
         x0, x1 = self.get_tensor_data()
         permutation = torch.randperm(len(x0))
         x0, x1 = x0[permutation], x1[permutation]
         
         # set up optimizer
-        optimizer = torch.optim.AdamW(self.probe.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        optimizer = torch.optim.AdamW(
+            self.probe.parameters(), lr=self.lr, weight_decay=self.weight_decay
+        )
         
         batch_size = len(x0) if self.batch_size == -1 else self.batch_size
         nbatches = len(x0) // batch_size
 
-        # Start training (full batch)
-        for epoch in range(self.nepochs):
+        # Start training
+        for _ in range(self.nepochs):
+            epoch_total_losses = []
             for j in range(nbatches):
                 x0_batch = x0[j*batch_size:(j+1)*batch_size]
                 x1_batch = x1[j*batch_size:(j+1)*batch_size]
@@ -256,32 +266,48 @@ class CCS(LatentKnowledgeMethod):
                 p0, p1 = self.probe(x0_batch), self.probe(x1_batch)
 
                 # get the corresponding loss
-                loss = self.get_loss(p0, p1)
+                consistent_loss, contrast_loss, total_loss = self.get_loss(p0, p1)
 
                 # update the parameters
                 optimizer.zero_grad()
-                loss.backward()
+                total_loss.backward()
                 optimizer.step()
 
-        return loss.detach().cpu().item()
+                epoch_total_losses.append(total_loss.detach().cpu().item())
+
+                if self.wandb_enabled:
+                    log_d = {
+                        'batch_consistent_loss': consistent_loss,
+                        'batch_contrast_loss': contrast_loss,
+                        'batch_total_loss': total_loss,
+                    }
+                    wandb.log(log_d, step=self.step_num)
+                if self.wandb_enabled and self.step_num % self.log_freq == 0:
+                    wandb.log({
+                        'train_accuracy': self.get_train_acc(best=False)[0],
+                        'test_accuracy': self.get_test_acc(best=False)[0],
+                    }, step=self.step_num)
+                self.step_num += 1
+                        
+        return (
+            sum(epoch_total_losses) / len(epoch_total_losses)
+        )
     
     def repeated_train(self):
         torch.manual_seed(self.seed)
+        self.step_num = 0
         best_loss = np.inf
-        for train_num in range(self.ntries):
+        for _ in range(self.ntries):
             self.initialize_probe()
-            loss = self.train()
-            if loss < best_loss:
+            total_loss = self.train()
+            if total_loss < best_loss:
                 self.best_probe = copy.deepcopy(self.probe)
-                best_loss = loss
+                best_loss = total_loss
                 if self.wandb_enabled:
                     wandb.log({
-                        'train_accuracy': self.get_train_acc()[0],
-                        'test_accuracy': self.get_test_acc()[0],
-                    }, step=train_num)
-            if self.wandb_enabled:
-                wandb.log({'loss': loss}, step=train_num)
-
+                        'best_train_accuracy': self.get_train_acc(best=True)[0],
+                        'best_test_accuracy': self.get_test_acc(best=True)[0],
+                    }, step=self.step_num)
         return best_loss
 
 
@@ -305,6 +331,7 @@ def fit_ccs(
         weight_decay=args.weight_decay, 
         var_normalize=args.var_normalize,
         wandb_enabled=args.wandb_enabled,
+        log_freq=args.ccs_log_freq,
     )
     # train
     if args.verbose:

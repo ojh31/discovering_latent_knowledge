@@ -642,7 +642,8 @@ class LatentKnowledgeMethod(object):
         return x0, x1
     
     def get_acc(
-            self, x0_val: np.ndarray, x1_val: np.ndarray, y_val: np.ndarray
+            self, x0_val: np.ndarray, x1_val: np.ndarray, y_val: np.ndarray,
+            best=True,
         ) -> Tuple[float, np.ndarray]:
         """
         Computes accuracy for the current parameters on the given test inputs
@@ -651,9 +652,10 @@ class LatentKnowledgeMethod(object):
         x1_val: positive hidden states, numpy array
         y_val: true labels, numpy array
         """
+        probe = self.best_probe if best else self.probe
         x0, x1 = self.get_tensor_data(x0_val, x1_val)
         with torch.no_grad():
-            p0, p1 = self.best_probe(x0), self.best_probe(x1)
+            p0, p1 = probe(x0), probe(x1)
         avg_confidence = (0.5 * (p0 + (1 - p1)))[:, 0]
         avg_conf_values = avg_confidence.detach().cpu().numpy()
         predictions = (avg_conf_values > 0.5).astype(int)
@@ -667,8 +669,12 @@ class LatentKnowledgeMethod(object):
         conf = np.where(y_val > 0, avg_conf_values, 1 - avg_conf_values)
         return acc, conf
     
-    def get_train_acc(self):
-        return self.get_acc(self.neg_hs_train, self.pos_hs_train, self.y_train)
+    def get_train_acc(self, best: bool = True):
+        return self.get_acc(
+            self.neg_hs_train, self.pos_hs_train, self.y_train, best=best,
+        )
     
-    def get_test_acc(self):
-        return self.get_acc(self.neg_hs_test, self.pos_hs_test, self.y_test)
+    def get_test_acc(self, best: bool = True):
+        return self.get_acc(
+            self.neg_hs_test, self.pos_hs_test, self.y_test, best=best,
+        )
